@@ -108,24 +108,42 @@ The MU Online installer is not included in this repository.
 
 ## Installation
 
-Run:
+For version 0.1.0, the recommended entry point is the tagged bootstrap
+script. The official MU Online Windows installer must already be present
+locally.
 
-```bash
+~~~bash
+curl -fsSL https://raw.githubusercontent.com/Krzysztof977/mu-online-linux/v0.1.0/bootstrap.sh | bash -s -- --installer "/path/to/official-MU-installer.exe"
+~~~
+
+The bootstrap downloads the matching versioned release archive, verifies its
+SHA256 checksum, extracts it to a temporary directory, runs the archived
+`scripts/install.sh` with the supplied arguments, and removes the temporary
+files after the installer exits.
+
+The bootstrap does not download or redistribute the proprietary MU Online
+installer.
+
+Advanced users may instead use a tagged source checkout:
+
+~~~bash
+git clone https://github.com/Krzysztof977/mu-online-linux.git
 cd mu-online-linux
+git checkout v0.1.0
 
 ./scripts/install.sh \
     --installer "/path/to/official-MU-installer.exe"
-```
+~~~
 
 The default private installation area is:
 
-```text
+~~~text
 ~/.local/share/mu-online-linux
-```
+~~~
 
 The installer also accepts:
 
-```text
+~~~text
 --base PATH
     Override the private installation workspace.
 
@@ -134,7 +152,7 @@ The installer also accepts:
 
 -h, --help
     Show installer usage.
-```
+~~~
 
 A normal user should not use `--skip-deps` unless all required dependencies
 are already installed.
@@ -452,22 +470,32 @@ Users must obtain MU Online through the official distribution channel.
 
 ## Repository layout
 
-```text
-patches/
-    Wine compatibility patches
+~~~text
+README.md
+VERSION
+CHANGELOG.md
+LICENSE
+
+LICENSES/
+    licensing details and LGPL-2.1-or-later text
+
+bootstrap.sh
+    tagged release bootstrap entry point
 
 scripts/
     automated installer
 
+patches/
+    Wine compatibility patches
+
 docs/
     engineering and installation documentation
+~~~
 
-checkpoints/
-    development verification metadata and frozen installer checkpoints
-```
-
-The `checkpoints/` directory documents tested development states. It is not a
-replacement for a versioned public release artifact.
+Local development checkpoints are intentionally kept outside the public
+source tree and outside versioned release archives. The repository
+`.gitignore` also protects a local `checkpoints/` directory from accidental
+staging.
 
 ## Verification history
 
@@ -521,20 +549,31 @@ the separately scope-audited and runtime-tested Stage 2E heartbeat.
 
 ## Documentation status
 
-The automated installer is the current implementation source of truth.
+The automated installer remains the implementation source of truth.
 
-The existing documents under `docs/` were written during earlier development
-stages and may still contain planned or historical behavior. They are being
-revised to match the current verified implementation.
+The current production documentation under `docs/` has been reconciled with
+the verified implementation. `docs/installer-design.md` and
+`docs/manual-install.md` are retained as historical/superseded development
+references and carry notices identifying that status.
 
 ## Release status
 
-The installer itself is functional and the reference installation path has
-been verified on Fedora 44 and Kubuntu 26.04.1.
+Version 0.1.0 uses the following publication layout:
 
-A versioned public release archive, release checksum file and bootstrap
-downloader have not yet been published.
+- repository: `https://github.com/Krzysztof977/mu-online-linux`
+- tag: `v0.1.0`
+- release archive: `mu-online-linux-0.1.0.tar.gz`
+- checksum asset: `SHA256SUMS`
+- tagged bootstrap: `bootstrap.sh`
 
-Until that release layer is completed, use the installer from a trusted local
-copy of this repository.
+The versioned release archive contains the distributable project code,
+patches, licensing material and documentation. It does not contain
+proprietary MU Online or GameGuard binaries.
 
+`bootstrap.sh` is intentionally distributed from the tagged Git source rather
+than embedded in the release tarball. This allows the tagged bootstrap to pin
+the expected SHA256 of the release archive without making the archive digest
+depend on the bootstrap file that contains that digest.
+
+The bootstrap verifies the downloaded release archive before invoking the
+archived `scripts/install.sh`.

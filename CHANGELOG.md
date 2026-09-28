@@ -4,11 +4,13 @@ All notable project changes intended for public releases are recorded here.
 
 ## 0.1.0
 
-Initial public release preparation.
+Initial public release.
 
 ### Added
 
 - automated MU Online Linux installer
+- tagged bootstrap entry point for versioned releases
+- deterministic release archive and SHA256 checksum publication
 - private Wine 11.6 build and runtime
 - isolated Wine prefix
 - Fedora and Ubuntu-family dependency backends

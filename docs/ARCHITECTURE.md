@@ -153,8 +153,17 @@ The project does not bundle, copy, restore or inject `GGKernel64.sys`.
 
 The release repository contains project source and documentation such as:
 
-```text
+~~~text
 README.md
+VERSION
+CHANGELOG.md
+LICENSE
+
+LICENSES/
+  README.md
+  LGPL-2.1-or-later.txt
+
+bootstrap.sh
 
 scripts/
   install.sh
@@ -172,12 +181,18 @@ docs/
   PATCHES.md
   TROUBLESHOOTING.md
   ARCHITECTURE.md
+~~~
 
-checkpoints/
-  ...
-```
+Local development checkpoints are kept outside the public source tree and
+outside versioned release archives. A local `checkpoints/` path is ignored by
+Git to reduce the risk of accidental publication.
 
-The repository must not contain proprietary MU or GameGuard binaries.
+The public Git repository contains `bootstrap.sh`, while the versioned release
+tarball intentionally omits it. The tagged bootstrap can therefore pin the
+release archive SHA256 without creating a self-referential archive digest.
+
+The repository and release archives must not contain proprietary MU or
+GameGuard binaries.
 
 ## Installer interface
 
