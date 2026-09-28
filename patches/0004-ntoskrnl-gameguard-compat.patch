@@ -1,0 +1,323 @@
+--- a/dlls/ntoskrnl.exe/ntoskrnl.c
++++ b/dlls/ntoskrnl.exe/ntoskrnl.c
+@@ -31,6 +31,7 @@
+ #include "ddk/csq.h"
+ #include "wine/server.h"
+ #include "wine/svcctl.h"
++#include "sddl.h"
+ 
+ WINE_DEFAULT_DEBUG_CHANNEL(ntoskrnl);
+ WINE_DECLARE_DEBUG_CHANNEL(relay);
+@@ -1639,16 +1640,190 @@
+  *           IoCreateDeviceSecure   (NTOSKRNL.EXE.@)
+  */
+ NTSTATUS WINAPI IoCreateDeviceSecure( DRIVER_OBJECT *driver, ULONG ext_size,
+-                                      UNICODE_STRING *name, DEVICE_TYPE type,
+-                                      ULONG characteristics, BOOLEAN exclusive,
+-                                      PCUNICODE_STRING sddl, LPCGUID guid,
+-                                      DEVICE_OBJECT **ret_device )
+-{
+-    FIXME( "(%p, %lu, %s, %lu, %lx, %u, %s, %s, %p): semi-stub\n",
++                                     UNICODE_STRING *name, DEVICE_TYPE type,
++                                     ULONG characteristics, BOOLEAN exclusive,
++                                     PCUNICODE_STRING sddl, LPCGUID guid,
++                                     DEVICE_OBJECT **ret_device )
++{
++    SECURITY_DESCRIPTOR_RELATIVE *relative;
++    PSECURITY_DESCRIPTOR descriptor = NULL;
++    SECURITY_INFORMATION security_info = 0;
++    ACCESS_MASK access = 0;
++    DEVICE_OBJECT *device = NULL;
++    WCHAR *sddl_string = NULL;
++    HANDLE handle = 0;
++    NTSTATUS status;
++    NTSTATUS open_status = STATUS_SUCCESS;
++    NTSTATUS set_status = STATUS_SUCCESS;
++    DWORD error = ERROR_SUCCESS;
++    SIZE_T sddl_size;
++
++    FIXME( "(%p, %lu, %s, %lu, %lx, %u, %s, %s, %p): "
++           "partial security implementation, DeviceClassGuid registry override not implemented\n",
+            driver, ext_size, debugstr_us(name), type, characteristics, exclusive,
+            debugstr_us(sddl), wine_dbgstr_guid(guid), ret_device );
+ 
+-    return IoCreateDevice( driver, ext_size, name, type, characteristics, exclusive, ret_device );
++    /*
++     * IoCreateDeviceSecure receives SDDL as UNICODE_STRING.
++     * Length is in bytes and Buffer is not required to have a
++     * trailing NUL.
++     */
++    if (sddl && sddl->Buffer)
++    {
++        if (sddl->Length % sizeof(WCHAR))
++        {
++            status = STATUS_INVALID_PARAMETER;
++            goto done;
++        }
++
++        sddl_size = sddl->Length + sizeof(WCHAR);
++
++        if (!(sddl_string = malloc( sddl_size )))
++        {
++            status = STATUS_INSUFFICIENT_RESOURCES;
++            goto done;
++        }
++
++        memcpy( sddl_string, sddl->Buffer, sddl->Length );
++        sddl_string[sddl->Length / sizeof(WCHAR)] = 0;
++
++        if (!ConvertStringSecurityDescriptorToSecurityDescriptorW(
++                sddl_string, SDDL_REVISION_1, &descriptor, NULL ))
++        {
++            error = GetLastError();
++
++            switch (error)
++            {
++            case ERROR_NOT_ENOUGH_MEMORY:
++                status = STATUS_INSUFFICIENT_RESOURCES;
++                break;
++
++            case ERROR_UNKNOWN_REVISION:
++                status = STATUS_UNKNOWN_REVISION;
++                break;
++
++            case ERROR_CALL_NOT_IMPLEMENTED:
++                status = STATUS_NOT_IMPLEMENTED;
++                break;
++
++            case ERROR_INVALID_PARAMETER:
++            case ERROR_INVALID_SID:
++            case ERROR_INVALID_ACL:
++            default:
++                status = STATUS_INVALID_SECURITY_DESCR;
++                break;
++            }
++
++            goto done;
++        }
++
++        relative = descriptor;
++
++        /*
++         * Match the SECURITY_INFORMATION -> DesiredAccess
++         * mapping used by the WDMSEC helper.
++         */
++        if (relative->Owner)
++        {
++            security_info |= OWNER_SECURITY_INFORMATION;
++            access |= WRITE_OWNER;
++        }
++
++        if (relative->Group)
++        {
++            security_info |= GROUP_SECURITY_INFORMATION;
++            access |= WRITE_OWNER;
++        }
++
++        if (relative->Control & SE_DACL_PRESENT)
++        {
++            security_info |= DACL_SECURITY_INFORMATION;
++            access |= WRITE_DAC;
++        }
++
++        if (relative->Control & SE_SACL_PRESENT)
++        {
++            security_info |= SACL_SECURITY_INFORMATION;
++            access |= ACCESS_SYSTEM_SECURITY;
++        }
++    }
++
++    status = IoCreateDevice( driver, ext_size, name, type,
++                             characteristics, exclusive, ret_device );
++
++    if (status)
++        goto done;
++
++    if (ret_device)
++        device = *ret_device;
++
++    /*
++     * Preserve ordinary IoCreateDevice semantics when no SDDL
++     * security information was supplied.
++     */
++    if (!descriptor || !security_info || !device)
++        goto done;
++
++    open_status = ObOpenObjectByPointer(
++            device,
++            OBJ_KERNEL_HANDLE,
++            NULL,
++            access,
++            IoDeviceObjectType,
++            KernelMode,
++            &handle );
++
++    if (open_status)
++    {
++        status = open_status;
++        goto security_failure;
++    }
++
++    /*
++     * Wine's ZwSetSecurityObject export aliases the underlying
++     * NtSetSecurityObject implementation.
++     */
++    set_status = NtSetSecurityObject(
++            handle,
++            security_info,
++            descriptor );
++
++    NtClose( handle );
++    handle = 0;
++
++    if (set_status)
++    {
++        status = set_status;
++        goto security_failure;
++    }
++
++    status = STATUS_SUCCESS;
++    goto done;
++
++security_failure:
++    if (handle)
++        NtClose( handle );
++
++    if (device)
++        IoDeleteDevice( device );
++
++    if (ret_device)
++        *ret_device = NULL;
++
++    handle = 0;
++    device = NULL;
++
++done:
++
++    if (!status && ret_device)
++        device = *ret_device;
++
++    free( sddl_string );
++
++    if (descriptor)
++        LocalFree( descriptor );
++
++    return status;
+ }
+ 
+ /***********************************************************************
+@@ -4754,6 +4929,82 @@
+     return PsIsSystemThread((PETHREAD)KeGetCurrentThread()) ? KernelMode : UserMode;
+ }
+ 
++/***********************************************************************
++ *           SeCaptureSecurityDescriptor   (NTOSKRNL.EXE.@)
++ *
++ * Compatibility implementation for self-relative security descriptors.
++ * Absolute descriptor capture is intentionally left unsupported until
++ * its complete semantics are implemented.
++ */
++NTSTATUS WINAPI SeCaptureSecurityDescriptor(
++        PSECURITY_DESCRIPTOR original,
++        KPROCESSOR_MODE mode,
++        POOL_TYPE pool_type,
++        BOOLEAN capture_if_kernel,
++        PSECURITY_DESCRIPTOR *captured )
++{
++    SECURITY_DESCRIPTOR *sd = original;
++    PSECURITY_DESCRIPTOR copy;
++    ULONG size;
++
++    TRACE( "original %p mode %u pool_type %u capture_if_kernel %u captured %p.\n",
++           original, mode, pool_type, capture_if_kernel, captured );
++
++    if (!captured)
++        return STATUS_INVALID_PARAMETER;
++
++    *captured = NULL;
++
++    if (!original)
++        return STATUS_SUCCESS;
++
++    /*
++     * Windows keeps the original kernel descriptor when capture was not
++     * explicitly requested.  Revision validation is still performed.
++     */
++    if (mode == KernelMode && !capture_if_kernel)
++    {
++        if (sd->Revision != 1)
++            return STATUS_UNKNOWN_REVISION;
++
++        *captured = original;
++        return STATUS_SUCCESS;
++    }
++
++    if (sd->Revision != 1)
++        return STATUS_UNKNOWN_REVISION;
++
++    if (!RtlValidSecurityDescriptor( original ))
++        return STATUS_INVALID_SECURITY_DESCR;
++
++    /*
++     * The complete Windows routine also converts absolute descriptors
++     * into newly allocated self-relative descriptors.  Do not fake that
++     * behaviour.  The GG WDMSEC path currently observed supplies an
++     * already self-relative descriptor.
++     */
++    if (!(sd->Control & SE_SELF_RELATIVE))
++    {
++        FIXME( "absolute security descriptor capture is not implemented.\n" );
++        return STATUS_NOT_IMPLEMENTED;
++    }
++
++    size = RtlLengthSecurityDescriptor( original );
++    if (!size)
++        return STATUS_INVALID_SECURITY_DESCR;
++
++    copy = ExAllocatePoolWithTag( pool_type, size, 0 );
++    if (!copy)
++        return STATUS_INSUFFICIENT_RESOURCES;
++
++    memcpy( copy, original, size );
++
++    *captured = copy;
++
++    return STATUS_SUCCESS;
++}
++
++
+ #ifdef __x86_64__
+ 
+ void WINAPI KfRaiseIrql(KIRQL new, KIRQL *old)
+@@ -4766,6 +5017,12 @@
+     FIXME("new %u: stub.\n", new);
+ }
+ 
++KIRQL WINAPI KeGetCurrentIrql(void)
++{
++    FIXME("stub.\n");
++    return 0;
++}
++
+ #endif
+ 
+ typedef void (WINAPI *PETW_CLASSIC_CALLBACK)(
+--- a/dlls/ntoskrnl.exe/ntoskrnl.exe.spec
++++ b/dlls/ntoskrnl.exe/ntoskrnl.exe.spec
+@@ -567,6 +567,7 @@
+ @ stdcall KeFlushQueuedDpcs()
+ @ stdcall KeGetCurrentProcessorNumber() NtGetCurrentProcessorNumber
+ @ stdcall KeGetCurrentProcessorNumberEx(ptr)
++@ stdcall -arch=x86_64 KeGetCurrentIrql()
+ @ stdcall KeGetCurrentThread()
+ @ stub KeGetPreviousMode
+ @ stub KeGetRecommendedSharedDataAlignment
+@@ -1344,7 +1345,7 @@
+ @ stub SeAuditingFileOrGlobalEvents
+ @ stub SeAuditingHardLinkEvents
+ @ stub SeAuditingHardLinkEventsWithContext
+-@ stub SeCaptureSecurityDescriptor
++@ stdcall SeCaptureSecurityDescriptor(ptr long long long ptr)
+ @ stub SeCaptureSubjectContext
+ @ stub SeCloseObjectAuditAlarm
+ @ stub SeCreateAccessState

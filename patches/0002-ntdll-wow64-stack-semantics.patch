@@ -1,0 +1,111 @@
+--- a/dlls/ntdll/unix/thread.c
++++ b/dlls/ntdll/unix/thread.c
+@@ -1207,7 +1207,7 @@
+     NTSTATUS status;
+ 
+     /* kernel stack */
+-    if ((status = virtual_alloc_thread_stack( &stack, limit_4g, 0, kernel_stack_size, kernel_stack_size, FALSE )))
++    if ((status = virtual_alloc_thread_stack( &stack, limit_4g, 0, kernel_stack_size, kernel_stack_size, FALSE, FALSE )))
+         return status;
+     thread_data->kernel_stack = stack.DeallocationStack;
+ 
+@@ -1218,7 +1218,7 @@
+             ((get_machine_context_size( main_image_info.Machine ) + 7) & ~7) + sizeof(ULONG64);
+ 
+         /* 64-bit stack */
+-        if ((status = virtual_alloc_thread_stack( &stack, limit_4g, 0, 0x40000, 0x40000, TRUE ))) return status;
++        if ((status = virtual_alloc_thread_stack( &stack, limit_4g, 0, 0x40000, 0x40000, TRUE, FALSE ))) return status;
+         cpu = (WOW64_CPURESERVED *)(((ULONG_PTR)stack.StackBase - cpusize) & ~15);
+         cpu->Machine = main_image_info.Machine;
+ 
+@@ -1229,7 +1229,7 @@
+ 
+         /* 32-bit stack */
+         if (!limit || limit > user_space_wow_limit) limit = user_space_wow_limit;
+-        if ((status = virtual_alloc_thread_stack( &stack, 0, limit, reserve_size, commit_size, TRUE )))
++        if ((status = virtual_alloc_thread_stack( &stack, 0, limit, reserve_size, commit_size, TRUE, TRUE )))
+             return status;
+         wow_teb->Tib.StackBase = PtrToUlong( stack.StackBase );
+         wow_teb->Tib.StackLimit = PtrToUlong( stack.StackLimit );
+@@ -1249,7 +1249,7 @@
+         const SIZE_T chpev2_stack_size = 0x40000;
+ 
+         /* emulator stack */
+-        if ((status = virtual_alloc_thread_stack( &stack, limit_4g, 0, chpev2_stack_size, chpev2_stack_size, FALSE )))
++        if ((status = virtual_alloc_thread_stack( &stack, limit_4g, 0, chpev2_stack_size, chpev2_stack_size, FALSE, FALSE )))
+             return status;
+ 
+         cpu_area = stack.DeallocationStack;
+@@ -1261,7 +1261,7 @@
+ #endif
+ 
+     /* native stack */
+-    if ((status = virtual_alloc_thread_stack( &stack, 0, limit, reserve_size, commit_size, TRUE )))
++    if ((status = virtual_alloc_thread_stack( &stack, 0, limit, reserve_size, commit_size, TRUE, FALSE )))
+         return status;
+     teb->Tib.StackBase = stack.StackBase;
+     teb->Tib.StackLimit = stack.StackLimit;
+--- a/dlls/ntdll/unix/unix_private.h
++++ b/dlls/ntdll/unix/unix_private.h
+@@ -304,7 +304,8 @@
+ extern void virtual_free_teb( TEB *teb );
+ extern NTSTATUS virtual_clear_tls_index( ULONG index );
+ extern NTSTATUS virtual_alloc_thread_stack( INITIAL_TEB *stack, ULONG_PTR limit_low, ULONG_PTR limit_high,
+-                                            SIZE_T reserve_size, SIZE_T commit_size, BOOL guard_page );
++                                            SIZE_T reserve_size, SIZE_T commit_size, BOOL guard_page,
++                                            BOOL use_commit_size );
+ extern void virtual_map_user_shared_data(void);
+ extern void virtual_init_user_shared_data(void);
+ extern NTSTATUS virtual_handle_fault( EXCEPTION_RECORD *rec, void *stack );
+--- a/dlls/ntdll/unix/virtual.c
++++ b/dlls/ntdll/unix/virtual.c
+@@ -4354,7 +4354,8 @@
+  *           virtual_alloc_thread_stack
+  */
+ NTSTATUS virtual_alloc_thread_stack( INITIAL_TEB *stack, ULONG_PTR limit_low, ULONG_PTR limit_high,
+-                                     SIZE_T reserve_size, SIZE_T commit_size, BOOL guard_page )
++                                     SIZE_T reserve_size, SIZE_T commit_size, BOOL guard_page,
++                                     BOOL use_commit_size )
+ {
+     struct file_view *view;
+     NTSTATUS status;
+@@ -4379,7 +4380,26 @@
+ #endif
+ 
+     /* setup no access guard page */
+-    if (guard_page)
++    if (guard_page && use_commit_size)
++    {
++        char *stack_base = (char *)view->base + view->size;
++        char *stack_limit = stack_base - commit_size;
++        char *guard = stack_limit - host_page_size;
++
++        /*
++         * Keep the full stack mapping committed as in stock Wine.
++         * Only relocate the guard page and StackLimit for the
++         * 32-bit WoW64 application stack.
++         */
++        set_page_vprot( view->base, host_page_size, 0 );
++        set_page_vprot( guard, host_page_size,
++                        VPROT_READ | VPROT_WRITE |
++                        VPROT_COMMITTED | VPROT_GUARD );
++
++        mprotect_range( view->base, host_page_size, 0, 0 );
++        mprotect_range( guard, host_page_size, 0, 0 );
++    }
++    else if (guard_page)
+     {
+         set_page_vprot( view->base, host_page_size, 0 );
+         set_page_vprot( (char *)view->base + host_page_size, host_page_size,
+@@ -4393,7 +4413,10 @@
+     stack->OldStackLimit = 0;
+     stack->DeallocationStack = view->base;
+     stack->StackBase = (char *)view->base + view->size;
+-    stack->StackLimit = (char *)view->base + (guard_page ? 2 * host_page_size : 0);
++    if (use_commit_size)
++        stack->StackLimit = (char *)stack->StackBase - commit_size;
++    else
++        stack->StackLimit = (char *)view->base + (guard_page ? 2 * host_page_size : 0);
+ done:
+     server_leave_uninterrupted_section( &virtual_mutex, &sigset );
+     return status;

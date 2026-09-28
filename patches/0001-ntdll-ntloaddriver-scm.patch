@@ -1,0 +1,383 @@
+--- a/dlls/ntdll/Makefile.in
++++ b/dlls/ntdll/Makefile.in
+@@ -19,6 +19,7 @@
+ 	atom.c \
+ 	crypt.c \
+ 	debugbuffer.c \
++	driver.c \
+ 	env.c \
+ 	error.c \
+ 	exception.c \
+--- /dev/null
++++ b/dlls/ntdll/driver.c
+@@ -0,0 +1,283 @@
++/*
++ * User-mode NtLoadDriver / NtUnloadDriver implementation.
++ *
++ * Delegate driver service operations to the Wine service manager so that
++ * kernel driver images continue to be hosted by winedevice.
++ */
++
++#include <stdarg.h>
++
++#include "ntstatus.h"
++#define WIN32_NO_STATUS
++
++#include "windef.h"
++#include "winbase.h"
++#include "winternl.h"
++#include "winsvc.h"
++
++#include "wine/debug.h"
++#include "ntdll_misc.h"
++
++WINE_DEFAULT_DEBUG_CHANNEL(ntdll);
++
++static const WCHAR servicesW[] =
++    L"\\Registry\\Machine\\System\\CurrentControlSet\\Services\\";
++
++struct service_api
++{
++    HMODULE module;
++
++    SC_HANDLE (WINAPI *OpenSCManagerW)(
++        const WCHAR *, const WCHAR *, DWORD);
++
++    SC_HANDLE (WINAPI *OpenServiceW)(
++        SC_HANDLE, const WCHAR *, DWORD);
++
++    BOOL (WINAPI *StartServiceW)(
++        SC_HANDLE, DWORD, const WCHAR **);
++
++    BOOL (WINAPI *ControlService)(
++        SC_HANDLE, DWORD, SERVICE_STATUS *);
++
++    BOOL (WINAPI *CloseServiceHandle)(
++        SC_HANDLE);
++};
++
++static NTSTATUS resolve_proc(HMODULE module, const char *name, void **proc)
++{
++    ANSI_STRING str;
++
++    RtlInitAnsiString(&str, name);
++    return LdrGetProcedureAddress(module, &str, 0, proc);
++}
++
++static NTSTATUS load_service_api(struct service_api *api)
++{
++    UNICODE_STRING dll_name;
++    NTSTATUS status;
++
++    memset(api, 0, sizeof(*api));
++
++    RtlInitUnicodeString(&dll_name, L"sechost.dll");
++
++    status = LdrLoadDll(NULL, 0, &dll_name, &api->module);
++    if (status)
++    {
++        WARN("failed to load sechost.dll, status %#lx\n", status);
++        return status;
++    }
++
++#define RESOLVE(name)                                                        \
++    do                                                                       \
++    {                                                                        \
++        status = resolve_proc(api->module, #name, (void **)&api->name);      \
++        if (status)                                                          \
++        {                                                                    \
++            WARN("failed to resolve %s, status %#lx\n", #name, status);      \
++            LdrUnloadDll(api->module);                                       \
++            memset(api, 0, sizeof(*api));                                    \
++            return status;                                                   \
++        }                                                                    \
++    } while (0)
++
++    RESOLVE(OpenSCManagerW);
++    RESOLVE(OpenServiceW);
++    RESOLVE(StartServiceW);
++    RESOLVE(ControlService);
++    RESOLVE(CloseServiceHandle);
++
++#undef RESOLVE
++
++    return STATUS_SUCCESS;
++}
++
++static NTSTATUS service_error_to_status(DWORD error)
++{
++    switch (error)
++    {
++    case ERROR_SUCCESS:
++        return STATUS_SUCCESS;
++
++    case ERROR_ACCESS_DENIED:
++        return STATUS_ACCESS_DENIED;
++
++    case ERROR_PRIVILEGE_NOT_HELD:
++        return STATUS_PRIVILEGE_NOT_HELD;
++
++    case ERROR_INVALID_PARAMETER:
++        return STATUS_INVALID_PARAMETER;
++
++    case ERROR_NOT_ENOUGH_MEMORY:
++    case ERROR_OUTOFMEMORY:
++        return STATUS_NO_MEMORY;
++
++    case ERROR_FILE_NOT_FOUND:
++    case ERROR_PATH_NOT_FOUND:
++    case ERROR_SERVICE_DOES_NOT_EXIST:
++        return STATUS_OBJECT_NAME_NOT_FOUND;
++
++    case ERROR_SERVICE_ALREADY_RUNNING:
++        return STATUS_IMAGE_ALREADY_LOADED;
++
++    case ERROR_SERVICE_NOT_ACTIVE:
++        return STATUS_OBJECT_NAME_NOT_FOUND;
++
++    default:
++        WARN("unmapped service error %lu\n", error);
++        return STATUS_UNSUCCESSFUL;
++    }
++}
++
++static NTSTATUS get_service_name(
++    const UNICODE_STRING *key_name,
++    WCHAR service_name[256])
++{
++    const SIZE_T prefix_len = ARRAY_SIZE(servicesW) - 1;
++    SIZE_T length;
++    SIZE_T service_len;
++    SIZE_T i;
++
++    if (!key_name || !key_name->Buffer)
++        return STATUS_INVALID_PARAMETER;
++
++    if (key_name->Length & (sizeof(WCHAR) - 1))
++        return STATUS_INVALID_PARAMETER;
++
++    if (key_name->MaximumLength < key_name->Length)
++        return STATUS_INVALID_PARAMETER;
++
++    length = key_name->Length / sizeof(WCHAR);
++
++    if (length <= prefix_len)
++        return STATUS_INVALID_PARAMETER;
++
++    if (wcsnicmp(key_name->Buffer, servicesW, prefix_len))
++        return STATUS_INVALID_PARAMETER;
++
++    service_len = length - prefix_len;
++
++    if (!service_len || service_len >= 256)
++        return STATUS_INVALID_PARAMETER;
++
++    for (i = 0; i < service_len; ++i)
++    {
++        if (!key_name->Buffer[prefix_len + i])
++            return STATUS_INVALID_PARAMETER;
++    }
++
++    memcpy(service_name,
++           key_name->Buffer + prefix_len,
++           service_len * sizeof(WCHAR));
++
++    service_name[service_len] = 0;
++
++    return STATUS_SUCCESS;
++}
++
++static NTSTATUS driver_service_control(
++    const UNICODE_STRING *key_name,
++    BOOL load)
++{
++    WCHAR service_name[256];
++    struct service_api api;
++    SC_HANDLE manager = NULL;
++    SC_HANDLE service = NULL;
++    SERVICE_STATUS service_status;
++    NTSTATUS status;
++    DWORD error = ERROR_SUCCESS;
++    BOOL ret;
++
++    status = get_service_name(key_name, service_name);
++    if (status)
++    {
++        WARN("invalid driver service key %s\n", debugstr_us(key_name));
++        return status;
++    }
++
++    status = load_service_api(&api);
++    if (status)
++        return status;
++
++    manager = api.OpenSCManagerW(NULL, NULL, SC_MANAGER_CONNECT);
++    if (!manager)
++    {
++        error = NtCurrentTeb()->LastErrorValue;
++        goto done;
++    }
++
++    service = api.OpenServiceW(
++        manager,
++        service_name,
++        load ? SERVICE_START : SERVICE_STOP);
++
++    if (!service)
++    {
++        error = NtCurrentTeb()->LastErrorValue;
++        goto done;
++    }
++
++    if (load)
++    {
++        TRACE("starting driver service %s\n", debugstr_w(service_name));
++
++        ret = api.StartServiceW(service, 0, NULL);
++    }
++    else
++    {
++        memset(&service_status, 0, sizeof(service_status));
++
++        TRACE("stopping driver service %s\n", debugstr_w(service_name));
++
++        ret = api.ControlService(
++            service,
++            SERVICE_CONTROL_STOP,
++            &service_status);
++    }
++
++    if (!ret)
++        error = NtCurrentTeb()->LastErrorValue;
++
++done:
++    if (service)
++        api.CloseServiceHandle(service);
++
++    if (manager)
++        api.CloseServiceHandle(manager);
++
++    LdrUnloadDll(api.module);
++
++    if (error)
++    {
++        status = service_error_to_status(error);
++
++        WARN("%s driver service %s failed, win32 %lu, status %#lx\n",
++             load ? "starting" : "stopping",
++             debugstr_w(service_name),
++             error,
++             status);
++
++        return status;
++    }
++
++    return STATUS_SUCCESS;
++}
++
++/******************************************************************************
++ *              NtLoadDriver  (NTDLL.@)
++ */
++NTSTATUS WINAPI NtLoadDriver(const UNICODE_STRING *name)
++{
++    TRACE("(%s)\n", debugstr_us(name));
++
++    return driver_service_control(name, TRUE);
++}
++
++/******************************************************************************
++ *              NtUnloadDriver  (NTDLL.@)
++ */
++NTSTATUS WINAPI NtUnloadDriver(const UNICODE_STRING *name)
++{
++    TRACE("(%s)\n", debugstr_us(name));
++
++    return driver_service_control(name, FALSE);
++}
+--- a/dlls/ntdll/ntsyscalls.h
++++ b/dlls/ntdll/ntsyscalls.h
+@@ -162,7 +162,7 @@
+     SYSCALL_ENTRY( 0x009e, NtInitializeNlsFiles, 12 ) \
+     SYSCALL_ENTRY( 0x009f, NtInitiatePowerAction, 16 ) \
+     SYSCALL_ENTRY( 0x00a0, NtListenPort, 8 ) \
+-    SYSCALL_ENTRY( 0x00a1, NtLoadDriver, 4 ) \
++    SYSCALL_ENTRY_NtLoadDriver( 0x00a1, NtLoadDriver, 4 ) \
+     SYSCALL_ENTRY( 0x00a2, NtLoadKey, 8 ) \
+     SYSCALL_ENTRY( 0x00a3, NtLoadKey2, 12 ) \
+     SYSCALL_ENTRY( 0x00a4, NtLoadKeyEx, 32 ) \
+@@ -251,7 +251,7 @@
+     SYSCALL_ENTRY( 0x00f7, NtTerminateJobObject, 8 ) \
+     SYSCALL_ENTRY( 0x00f8, NtTestAlert, 0 ) \
+     SYSCALL_ENTRY( 0x00f9, NtTraceControl, 24 ) \
+-    SYSCALL_ENTRY( 0x00fa, NtUnloadDriver, 4 ) \
++    SYSCALL_ENTRY_NtUnloadDriver( 0x00fa, NtUnloadDriver, 4 ) \
+     SYSCALL_ENTRY( 0x00fb, NtUnloadKey, 4 ) \
+     SYSCALL_ENTRY( 0x00fc, NtUnlockFile, 20 ) \
+     SYSCALL_ENTRY( 0x00fd, NtUnlockVirtualMemory, 16 ) \
+@@ -428,7 +428,7 @@
+     SYSCALL_ENTRY( 0x009e, NtInitializeNlsFiles, 24 ) \
+     SYSCALL_ENTRY( 0x009f, NtInitiatePowerAction, 32 ) \
+     SYSCALL_ENTRY( 0x00a0, NtListenPort, 16 ) \
+-    SYSCALL_ENTRY( 0x00a1, NtLoadDriver, 8 ) \
++    SYSCALL_ENTRY_NtLoadDriver( 0x00a1, NtLoadDriver, 8 ) \
+     SYSCALL_ENTRY( 0x00a2, NtLoadKey, 16 ) \
+     SYSCALL_ENTRY( 0x00a3, NtLoadKey2, 24 ) \
+     SYSCALL_ENTRY( 0x00a4, NtLoadKeyEx, 64 ) \
+@@ -517,7 +517,7 @@
+     SYSCALL_ENTRY( 0x00f7, NtTerminateJobObject, 16 ) \
+     SYSCALL_ENTRY( 0x00f8, NtTestAlert, 0 ) \
+     SYSCALL_ENTRY( 0x00f9, NtTraceControl, 48 ) \
+-    SYSCALL_ENTRY( 0x00fa, NtUnloadDriver, 8 ) \
++    SYSCALL_ENTRY_NtUnloadDriver( 0x00fa, NtUnloadDriver, 8 ) \
+     SYSCALL_ENTRY( 0x00fb, NtUnloadKey, 8 ) \
+     SYSCALL_ENTRY( 0x00fc, NtUnlockFile, 40 ) \
+     SYSCALL_ENTRY( 0x00fd, NtUnlockVirtualMemory, 32 ) \
+@@ -534,5 +534,7 @@
+     SYSCALL_STUB( NtMapUserPhysicalPagesScatter ) \
+     SYSCALL_STUB( NtTraceEvent ) \
+     SYSCALL_STUB( NtWaitForMultipleObjects32 )
++#define SYSCALL_ENTRY_NtLoadDriver(id,name,args) SYSCALL_ENTRY(id,name,args)
+ #define SYSCALL_ENTRY_NtQueryInformationProcess(id,name,args) SYSCALL_ENTRY(id,name,args)
+ #define SYSCALL_ENTRY_NtQuerySystemTime(id,name,args) SYSCALL_ENTRY(id,name,args)
++#define SYSCALL_ENTRY_NtUnloadDriver(id,name,args) SYSCALL_ENTRY(id,name,args)
+--- a/dlls/ntdll/signal_i386.c
++++ b/dlls/ntdll/signal_i386.c
+@@ -82,7 +82,13 @@
+  *         syscalls
+  */
+ #define SYSCALL_ENTRY(id,name,args) __ASM_SYSCALL_FUNC( id, name, args )
++#undef SYSCALL_ENTRY_NtLoadDriver
++#undef SYSCALL_ENTRY_NtUnloadDriver
++#define SYSCALL_ENTRY_NtLoadDriver(id,name,args)
++#define SYSCALL_ENTRY_NtUnloadDriver(id,name,args)
+ ALL_SYSCALLS
++#undef SYSCALL_ENTRY_NtUnloadDriver
++#undef SYSCALL_ENTRY_NtLoadDriver
+ DEFINE_SYSCALL_HELPER32()
+ #undef SYSCALL_ENTRY
+ 
+--- a/dlls/ntdll/signal_x86_64.c
++++ b/dlls/ntdll/signal_x86_64.c
+@@ -43,7 +43,13 @@
+  *         syscalls
+  */
+ #define SYSCALL_ENTRY(id,name,args) __ASM_SYSCALL_FUNC( id, name )
++#undef SYSCALL_ENTRY_NtLoadDriver
++#undef SYSCALL_ENTRY_NtUnloadDriver
++#define SYSCALL_ENTRY_NtLoadDriver(id,name,args)
++#define SYSCALL_ENTRY_NtUnloadDriver(id,name,args)
+ ALL_SYSCALLS
++#undef SYSCALL_ENTRY_NtUnloadDriver
++#undef SYSCALL_ENTRY_NtLoadDriver
+ #undef SYSCALL_ENTRY
+ 
+ 
+--- a/tools/make_specfiles
++++ b/tools/make_specfiles
+@@ -435,5 +435,5 @@
+     sync_spec_files( @{$group} );
+ }
+ 
+-update_syscalls( "ntdll", "dlls/ntdll/ntsyscalls.h", 0, { NtQueryInformationProcess => 1, NtQuerySystemTime => 1 } );
++update_syscalls( "ntdll", "dlls/ntdll/ntsyscalls.h", 0, { NtLoadDriver => 1, NtQueryInformationProcess => 1, NtQuerySystemTime => 1, NtUnloadDriver => 1 } );
+ update_syscalls( "win32u", "dlls/win32u/win32syscalls.h", 0x1000, {} );

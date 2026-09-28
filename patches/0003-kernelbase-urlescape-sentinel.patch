@@ -1,0 +1,16 @@
+--- a/dlls/kernelbase/path.c
++++ b/dlls/kernelbase/path.c
+@@ -3278,7 +3278,12 @@
+     if (hr == S_OK)
+     {
+         RtlUnicodeToMultiByteSize(&lenA, escapedW, lenW * sizeof(WCHAR));
+-        if (*escaped_len > lenA)
++        if (*escaped_len == ~0u)
++        {
++            *escaped_len = lenA + 1;
++            hr = E_INVALIDARG;
++        }
++        else if (*escaped_len > lenA)
+         {
+             RtlUnicodeToMultiByteN(escaped, *escaped_len - 1, &lenA, escapedW, lenW * sizeof(WCHAR));
+             escaped[lenA] = 0;
