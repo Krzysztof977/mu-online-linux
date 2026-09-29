@@ -109,8 +109,32 @@ The MU Online installer is not included in this repository.
 ## Installation
 
 For version 0.1.0, the recommended entry point is the tagged bootstrap
-script. The official MU Online Windows installer must already be present
-locally.
+script. The official MU Online Windows installer must already be downloaded
+separately from Webzen and present locally.
+
+Before running the command below:
+
+1. The command is an example. Replace
+   `/path/to/official-MU-installer.exe` with the actual path to the official
+   MU Online installer on your computer. Keep the path in quotes, especially
+   if it contains spaces.
+2. The full installation can take **30 minutes or more**, depending on CPU
+   performance, storage speed, network speed, and package download times.
+   Building Wine is the longest stage and may appear inactive for periods of
+   time. Do not interrupt the installer or reboot the system unless an actual
+   error is reported.
+3. If Wine asks to install **Wine Mono** or **Wine Gecko**, choose
+   **Install**. If both prompts appear, install both components.
+4. When the installation finishes, the installer prints the next step and
+   launch instructions in the terminal.
+5. On the first launch, a small dialog may appear with garbled or unreadable
+   text because of the game's legacy character encoding. This is expected;
+   click **OK** and continue.
+6. The bootstrap downloads and verifies only the MU Online Linux
+   compatibility package. It does not download or redistribute MU Online,
+   nProtect GameGuard, or other proprietary game files.
+
+Example:
 
 ~~~bash
 curl -fsSL https://raw.githubusercontent.com/Krzysztof977/mu-online-linux/v0.1.0/bootstrap.sh | bash -s -- --installer "/path/to/official-MU-installer.exe"
@@ -120,9 +144,6 @@ The bootstrap downloads the matching versioned release archive, verifies its
 SHA256 checksum, extracts it to a temporary directory, runs the archived
 `scripts/install.sh` with the supplied arguments, and removes the temporary
 files after the installer exits.
-
-The bootstrap does not download or redistribute the proprietary MU Online
-installer.
 
 Advanced users may instead use a tagged source checkout:
 
