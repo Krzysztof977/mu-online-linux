@@ -7,10 +7,11 @@ The installer source is the implementation source of truth.
 
 ## Support model
 
-The current installer recognizes two Linux distribution families:
+The current installer recognizes three distribution IDs using two dependency backends:
 
-- Fedora
-- Ubuntu
+- Fedora (ID=fedora) — DNF backend
+- Nobara (ID=nobara) — DNF backend
+- Ubuntu (ID=ubuntu) — APT backend
 
 The installer does not currently contain dependency backends for Arch Linux,
 openSUSE, Debian with `ID=debian`, or other distribution IDs.
@@ -25,6 +26,7 @@ Full end-to-end installation and real game launch have been verified on:
 | System | Architecture | Installer status | E2E status |
 | --- | --- | --- | --- |
 | Fedora 44 | x86_64 | Supported | Verified |
+| Nobara Linux 44 | x86_64 | Fedora/DNF backend | Verified |
 | Kubuntu 26.04.1, Ubuntu 26.04 base | x86_64 | Supported through `ID=ubuntu` | Verified |
 
 The verified E2E path includes dependency installation, Wine build, private
@@ -48,6 +50,13 @@ Fedora 44 is the verified reference release.
 If another Fedora release is detected, the installer prints a warning but does
 not reject it solely because of the version number.
 
+For Nobara:
+
+    ID=nobara
+
+Nobara 44 is E2E verified. It uses the existing Fedora/DNF backend.
+Other Nobara releases receive a version warning.
+
 For Ubuntu:
 
 ```text
@@ -67,11 +76,14 @@ Ubuntu derivatives are accepted only when their `/etc/os-release` reports
 The verified Kubuntu 26.04.1 installation follows this path because its base
 reports Ubuntu 26.04 to the installer.
 
-Any other distribution `ID` is currently rejected with:
+Other distribution IDs are rejected. The legacy fallback message reads:
 
 ```text
 supported distributions are currently Fedora and Ubuntu
 ```
+
+This message does not yet mention Nobara, although ID=nobara is accepted.
+It will be revised in a future installer update.
 
 ## Operating system gate
 
@@ -153,7 +165,7 @@ environment.
 
 ## Fedora backend
 
-For Fedora the installer requires the `dnf` command.
+For Fedora and Nobara the installer requires the `dnf` command.
 
 Dependency installation is performed with:
 
@@ -163,8 +175,8 @@ dnf install -y <package-list>
 
 Fedora 44 is the full-E2E reference Fedora release.
 
-Other Fedora versions enter the same backend but receive a warning that Fedora
-44 is the verified reference.
+Other Fedora and Nobara versions use the same DNF backend but receive
+a warning when they differ from their verified release 44.
 
 ## Ubuntu backend
 
@@ -600,20 +612,21 @@ A system is **supported by the current backend** when its `/etc/os-release`
 selects one of the implemented dependency backends and it passes the current
 platform and dependency gates.
 
-At present those backend IDs are:
+At present these distribution IDs select implemented backends:
 
 ```text
 fedora
+nobara
 ubuntu
 ```
 
-This means an untested Fedora or Ubuntu release may be accepted by the
-installer while still lacking E2E-verified status.
+This means an untested Fedora, Nobara or Ubuntu release may be accepted
+without having E2E-verified status.
 
 ### Accepted with version warning
 
-A Fedora release other than Fedora 44 or an Ubuntu release other than Ubuntu
-26.04 currently enters its normal distribution backend but receives a warning.
+A Fedora or Nobara release other than 44, or an Ubuntu release other
+than 26.04, enters its dependency backend with a version warning.
 
 The warning means:
 
@@ -634,7 +647,7 @@ Examples include:
 
 - non-Linux hosts
 - non-x86_64 hosts
-- distribution IDs other than `fedora` and `ubuntu`
+- distribution IDs other than `fedora`, `nobara` and `ubuntu`
 - Ubuntu installations whose native dpkg architecture is not `amd64`
 
 Using `--skip-deps` does not change these platform or distribution gates.
@@ -690,7 +703,7 @@ VERSION_ID=26.04
 A derivative reporting a different `ID` does not automatically inherit Ubuntu
 backend support.
 
-## Qualifying a new Fedora or Ubuntu release
+## Qualifying a new distribution release
 
 Before adding another release to the reference-tested matrix, test it from a
 clean or otherwise precisely documented baseline.
@@ -744,24 +757,36 @@ If a later installer state differs from the full-E2E-tested state, the
 difference must be documented rather than silently treating the new SHA as if
 it had completed the same E2E run.
 
-For the current development state:
+For the v0.1.0 release (historical):
 
 ```text
 Full-E2E-tested base installer:
 e2c82048dfd6d5a41bcb5620056a91861bcba0548e0c6d2d5c5230ec05987b7b
 
-Current installer:
+v0.1.0 release installer:
 2daa0ceafe55a12b9c78679505ce3f4dff41ebc8824ad83bca44dca58619a984
 ```
 
-The current installer differs from that full-E2E-tested base only by the
+The v0.1.0 installer differs from that full-E2E-tested base only by the
 Stage 2E private-runtime-install heartbeat.
 
 That change received a separate exact scope audit and interactive/non-
-interactive runtime tests, but the current SHA was not subjected to another
+interactive runtime tests, but that v0.1.0 SHA was not subjected to another
 complete Wine-build and game E2E run.
 
 This distinction should remain visible in release and test documentation.
+
+## v0.1.1 Nobara qualification
+
+Nobara Linux 44 x86_64 completed a full installation and real
+MU Online gameplay test using the Fedora/DNF dependency backend.
+
+E2E-tested installer SHA256:
+
+    34c011d75678e9007336e65a7f6058561dbff682f50b4f9f58686cd7494fdecc
+
+Wine 11.6, the four compatibility patches and GameGuard handling
+were not modified for v0.1.1.
 
 ## Adding a new distribution family
 
@@ -793,11 +818,11 @@ merely to make a distribution pass installation.
 | Distribution | Release | Host architecture | Backend | Full E2E |
 | --- | --- | --- | --- | --- |
 | Fedora | 44 | x86_64 | Fedora / dnf | Yes |
+| Nobara Linux | 44 | x86_64 | Fedora / dnf | Yes |
 | Kubuntu | 26.04.1 | x86_64 | Ubuntu / apt | Yes |
 
 The Kubuntu result represents the tested Ubuntu 26.04-based path currently used
 as the Ubuntu-family reference.
 
-No other distribution release is currently documented here as full-E2E
-verified.
+The verified matrix is limited to the three tested releases above.
 

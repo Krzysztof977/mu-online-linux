@@ -619,6 +619,15 @@ case "${ID:-}" in
         fi
         ;;
 
+    nobara)
+        DISTRO_FAMILY="fedora"
+        DISTRO_VERSION="${VERSION_ID:-}"
+
+        if [ "$DISTRO_VERSION" != "44" ]; then
+            echo "WARNING: Nobara validation target is 44; detected Nobara ${DISTRO_VERSION:-unknown}"
+        fi
+        ;;
+
     ubuntu)
         DISTRO_FAMILY="ubuntu"
         DISTRO_VERSION="${VERSION_ID:-}"
