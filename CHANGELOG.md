@@ -2,6 +2,27 @@
 
 All notable project changes intended for public releases are recorded here.
 
+## 0.1.1 — Nobara Linux 44 support
+
+### Added
+- Nobara Linux detection (ID=nobara).
+- Fedora/DNF dependency backend for Nobara.
+- Version warning for Nobara releases other than 44.
+
+### Verified
+- Nobara Linux 44 x86_64.
+- Automatic dependency installation.
+- Private patched Wine 11.6 build and installation.
+- MU Online installation and successful gameplay.
+
+### Compatibility
+- Four Wine patches unchanged.
+- Fedora and Ubuntu backends unchanged.
+- v0.1.0 remains available unchanged.
+
+### E2E installer SHA256
+34c011d75678e9007336e65a7f6058561dbff682f50b4f9f58686cd7494fdecc
+
 ## 0.1.0
 
 Initial public release.

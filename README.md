@@ -16,6 +16,7 @@ Full end-to-end installation and game launch have been verified on:
 
 - Fedora 44 x86_64
 - Kubuntu 26.04.1 x86_64, based on Ubuntu 26.04
+- Nobara Linux 44 x86_64
 
 The verified path includes:
 
@@ -79,6 +80,7 @@ GameGuard remains responsible for supplying and managing its own driver file.
 The installer currently supports:
 
 - Fedora
+- Nobara Linux (`ID=nobara`, Fedora/DNF backend)
 - Ubuntu and Ubuntu-based systems reporting `ID=ubuntu`
 
 Fully tested reference systems:
@@ -86,10 +88,11 @@ Fully tested reference systems:
 | Distribution | Architecture | Status |
 | --- | --- | --- |
 | Fedora 44 | x86_64 | Full E2E verified |
+| Nobara Linux 44 | x86_64 | Full E2E verified |
 | Kubuntu 26.04.1 / Ubuntu 26.04 base | x86_64 | Full E2E verified |
 
-Fedora releases other than 44 and Ubuntu releases other than 26.04 are not
-currently reference-tested.
+Fedora and Nobara releases other than 44, and Ubuntu releases other
+than 26.04, are not currently reference-tested.
 
 Other distribution families such as Arch Linux and openSUSE are not yet
 supported by the installer.
@@ -108,12 +111,12 @@ The MU Online installer is not included in this repository.
 
 ## Installation
 
-For version 0.1.0, the recommended entry point is the tagged bootstrap
+For version 0.1.1, the recommended entry point is the tagged bootstrap
 script. The official MU Online Windows installer must already be present
 locally.
 
 ~~~bash
-curl -fsSL https://raw.githubusercontent.com/Krzysztof977/mu-online-linux/v0.1.0/bootstrap.sh | bash -s -- --installer "/path/to/official-MU-installer.exe"
+curl -fsSL https://raw.githubusercontent.com/Krzysztof977/mu-online-linux/v0.1.1/bootstrap.sh | bash -s -- --installer "/path/to/official-MU-installer.exe"
 ~~~
 
 The bootstrap downloads the matching versioned release archive, verifies its
@@ -129,7 +132,7 @@ Advanced users may instead use a tagged source checkout:
 ~~~bash
 git clone https://github.com/Krzysztof977/mu-online-linux.git
 cd mu-online-linux
-git checkout v0.1.0
+git checkout v0.1.1
 
 ./scripts/install.sh \
     --installer "/path/to/official-MU-installer.exe"
@@ -497,7 +500,19 @@ source tree and outside versioned release archives. The repository
 `.gitignore` also protects a local `checkpoints/` directory from accidental
 staging.
 
-## Verification history
+## Nobara 44 verification (v0.1.1)
+
+Nobara Linux 44 x86_64 completed the normal installer workflow
+using the Fedora/DNF backend and private patched Wine 11.6.
+MU Online was successfully launched and gameplay confirmed.
+
+E2E-tested scripts/install.sh SHA256:
+
+    34c011d75678e9007336e65a7f6058561dbff682f50b4f9f58686cd7494fdecc
+
+Wine 11.6 and all four compatibility patches remain unchanged.
+
+## Verification history (v0.1.0)
 
 The immediately preceding installer state completed full end-to-end testing
 on both reference platforms.
@@ -537,13 +552,13 @@ That change was validated separately with:
 - non-TTY heartbeat test
 - successful heartbeat shutdown
 
-Current installer SHA256:
+v0.1.0 installer SHA256:
 
 ```text
 2daa0ceafe55a12b9c78679505ce3f4dff41ebc8824ad83bca44dca58619a984
 ```
 
-The current SHA has not been subjected to another complete Wine-build and game
+The v0.1.0 SHA has not been subjected to another complete Wine-build and game
 E2E run because its only difference from the preceding E2E-tested state is
 the separately scope-audited and runtime-tested Stage 2E heartbeat.
 
@@ -558,11 +573,11 @@ references and carry notices identifying that status.
 
 ## Release status
 
-Version 0.1.0 uses the following publication layout:
+Version 0.1.1 uses the following publication layout:
 
 - repository: `https://github.com/Krzysztof977/mu-online-linux`
-- tag: `v0.1.0`
-- release archive: `mu-online-linux-0.1.0.tar.gz`
+- tag: `v0.1.1`
+- release archive: `mu-online-linux-0.1.1.tar.gz`
 - checksum asset: `SHA256SUMS`
 - tagged bootstrap: `bootstrap.sh`
 
