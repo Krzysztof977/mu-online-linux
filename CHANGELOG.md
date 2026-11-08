@@ -9,6 +9,12 @@ All notable project changes intended for public releases are recorded here.
   dependency recipe including multilib and Vulkan headers.
 - Explicitly confirmed dependency installation and independent native,
   i386/x86_64 MinGW, graphics, GnuTLS and audio ABI validation.
+- No hard-coded distribution allowlist: a Linux x86_64 system with an
+  untested distribution ID is not rejected solely by its OS name.
+  Instead, the installer classifies it as unverified and offers an
+  experimental path after the user types `CONTINUE` (also accepts
+  `continue`, case-insensitively). Build/toolchain/ABI verification is
+  mandatory; missing or unsupported dependencies still block installation.
 - Case-insensitive explicit consent keywords (CONTINUE and INSTALL).
 - Build/configure/runtime/prefix validation checkpoints and guarded
   --resume-from-prefix mode.
