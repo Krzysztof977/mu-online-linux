@@ -48,6 +48,13 @@ DEFAULT_BASE="$HOME/.local/share/mu-online-linux"
 BASE="$DEFAULT_BASE"
 INSTALLER=""
 SKIP_DEPS=0
+DEPS_ONLY=0
+CONFIGURE_ONLY=0
+BUILD_ONLY=0
+RUNTIME_ONLY=0
+PREFIX_ONLY=0
+RESUME_FROM_PREFIX=0
+BUILD_JOBS_OVERRIDE=""
 
 usage()
 {
@@ -60,6 +67,15 @@ Options:
   --base PATH        Installation workspace.
                      Default: $DEFAULT_BASE
   --skip-deps        Do not run system dependency installation.
+  --deps-only        Read-only dependency validation; no MU installer needed.
+  --configure-only   Verify/patch Wine source and run configure only.
+                     No MU installer, build, runtime or prefix required.
+  --build-only       Configure and compile Wine without installing runtime or MU.
+  --runtime-only     Install and verify private Wine without creating prefix or MU.
+  --prefix-only      Initialize/validate pristine WoW64 prefix using installed Wine.
+  --resume-from-prefix
+                     Reuse verified Wine and prefix, install official MU.
+  --jobs N           Parallel make jobs (default: nproc).
   -h, --help         Show this help.
 
 The script installs a private Wine runtime and a separate Wine prefix.
@@ -547,6 +563,48 @@ do
             shift
             ;;
 
+        --deps-only)
+            DEPS_ONLY=1
+            SKIP_DEPS=1
+            shift
+            ;;
+
+        --configure-only)
+            CONFIGURE_ONLY=1
+            SKIP_DEPS=1
+            shift
+            ;;
+
+        --build-only)
+            BUILD_ONLY=1
+            SKIP_DEPS=1
+            shift
+            ;;
+
+        --runtime-only)
+            RUNTIME_ONLY=1
+            SKIP_DEPS=1
+            shift
+            ;;
+
+        --prefix-only)
+            PREFIX_ONLY=1
+            SKIP_DEPS=1
+            shift
+            ;;
+
+        --resume-from-prefix)
+            RESUME_FROM_PREFIX=1
+            SKIP_DEPS=1
+            shift
+            ;;
+
+        --jobs)
+            [ "$#" -ge 2 ] || die "--jobs requires a positive integer"
+            BUILD_JOBS_OVERRIDE="$2"
+            shift 2
+            ;;
+
         -h|--help)
             usage
             exit 0
@@ -558,17 +616,66 @@ do
     esac
 done
 
-[ -n "$INSTALLER" ] || {
-    usage
-    die "official MU installer path is required"
-}
+if [ "$DEPS_ONLY" -eq 1 ] && [ "$CONFIGURE_ONLY" -eq 1 ]; then
+    die "--deps-only and --configure-only cannot be combined"
+fi
 
-INSTALLER="$(
-    readlink -f -- "$INSTALLER"
-)" || die "cannot resolve installer path"
+if [ "$BUILD_ONLY" -eq 1 ] &&
+   { [ "$DEPS_ONLY" -eq 1 ] || [ "$CONFIGURE_ONLY" -eq 1 ]; }; then
+    die "--build-only cannot be combined with --deps-only or --configure-only"
+fi
 
-[ -f "$INSTALLER" ] ||
-    die "installer does not exist: $INSTALLER"
+if [ "$RUNTIME_ONLY" -eq 1 ] &&
+   { [ "$DEPS_ONLY" -eq 1 ] || [ "$CONFIGURE_ONLY" -eq 1 ] ||
+     [ "$BUILD_ONLY" -eq 1 ]; }; then
+    die "--runtime-only cannot be combined with other --*-only modes"
+fi
+
+if [ "$PREFIX_ONLY" -eq 1 ] &&
+   { [ "$DEPS_ONLY" -eq 1 ] || [ "$CONFIGURE_ONLY" -eq 1 ] ||
+     [ "$BUILD_ONLY" -eq 1 ] || [ "$RUNTIME_ONLY" -eq 1 ]; }; then
+    die "--prefix-only cannot be combined with other --*-only modes"
+fi
+
+if [ "$RESUME_FROM_PREFIX" -eq 1 ] &&
+   { [ "$DEPS_ONLY" -eq 1 ] || [ "$CONFIGURE_ONLY" -eq 1 ] ||
+     [ "$BUILD_ONLY" -eq 1 ] || [ "$RUNTIME_ONLY" -eq 1 ] ||
+     [ "$PREFIX_ONLY" -eq 1 ]; }; then
+    die "--resume-from-prefix cannot be combined with other --*-only modes"
+fi
+
+if { [ "$PREFIX_ONLY" -eq 1 ] || [ "$RESUME_FROM_PREFIX" -eq 1 ]; } &&
+   [ -n "$BUILD_JOBS_OVERRIDE" ]; then
+    die "--jobs is not supported for --prefix-only or --resume-from-prefix"
+fi
+
+if [ -n "$BUILD_JOBS_OVERRIDE" ]; then
+    case "$BUILD_JOBS_OVERRIDE" in
+        *[!0-9]*|'') die "--jobs requires a positive integer" ;;
+    esac
+    [ "$BUILD_JOBS_OVERRIDE" -ge 1 ] 2>/dev/null ||
+        die "--jobs requires a positive integer"
+fi
+
+if [ "$DEPS_ONLY" -eq 0 ] &&
+   [ "$CONFIGURE_ONLY" -eq 0 ] &&
+   [ "$BUILD_ONLY" -eq 0 ] &&
+   [ "$RUNTIME_ONLY" -eq 0 ] &&
+   [ "$PREFIX_ONLY" -eq 0 ]; then
+    [ -n "$INSTALLER" ] || {
+        usage
+        die "official MU installer path is required"
+    }
+
+    INSTALLER="$(
+        readlink -f -- "$INSTALLER"
+    )" || die "cannot resolve installer path"
+
+    [ -f "$INSTALLER" ] ||
+        die "installer does not exist: $INSTALLER"
+else
+    INSTALLER="(not required for preliminary validation)"
+fi
 
 SOURCE_CACHE="$BASE/cache"
 WORK="$BASE/work"
@@ -591,6 +698,129 @@ GG_SERVICE='HKLM\System\CurrentControlSet\Services\GGKernel64'
 
 GG_IMAGE_PATH='\??\C:\Program Files (x86)\Webzen\Mu\GameGuard\GGKernel64.sys'
 
+if [ "$PREFIX_ONLY" -eq 1 ] || [ "$RESUME_FROM_PREFIX" -eq 1 ]; then
+    if [ "$RESUME_FROM_PREFIX" -eq 1 ]; then
+        log "Resume from validated private Wine runtime and pristine prefix"
+    else
+        log "Reuse existing private Wine runtime for pristine prefix"
+    fi
+
+    [ "$(uname -s)" = Linux ] || die "Linux required"
+    [ "$(uname -m)" = x86_64 ] || die "x86_64 required"
+
+    # shellcheck source=lib/platform-detect.sh
+    . "$SCRIPT_DIR/lib/platform-detect.sh"
+    # shellcheck source=lib/consent.sh
+    . "$SCRIPT_DIR/lib/consent.sh"
+    mu_detect_platform || die "platform detection failed"
+    mu_platform_report
+
+    if [ "$MU_DISTRO_STATUS" != verified ]; then
+        [ -t 0 ] && [ -t 1 ] ||
+            die "unverified distribution requires interactive confirmation"
+        if [ "$RESUME_FROM_PREFIX" -eq 1 ]; then
+            printf 'WARNING: this command runs the supplied MU installer and completes setup.\n'
+            read -r -p 'Type CONTINUE to install MU on this unverified distro: ' CONSENT ||
+                die "confirmation not received"
+        else
+            read -r -p 'Type CONTINUE to initialize a prefix on this unverified distro: ' CONSENT ||
+                die "confirmation not received"
+        fi
+        mu_consent_matches "$CONSENT" CONTINUE ||
+            die "experimental prefix initialization not approved"
+    fi
+
+    if [ "$PREFIX_ONLY" -eq 1 ]; then
+        [ ! -e "$PREFIX" ] ||
+            die "prefix already exists; --prefix-only must never overwrite it: $PREFIX"
+    else
+        [ -d "$PREFIX" ] ||
+            die "existing prefix missing; --resume-from-prefix cannot initialize it"
+        for REG in system.reg user.reg userdef.reg; do
+            [ -f "$PREFIX/$REG" ] ||
+                die "existing prefix registry file missing: $REG"
+        done
+
+        [ -f "$PREFIX/drive_c/windows/system32/notepad.exe" ] ||
+            die "existing prefix has no x86_64 system32 notepad.exe"
+        [ -f "$PREFIX/drive_c/windows/syswow64/notepad.exe" ] ||
+            die "existing prefix has no i386 syswow64 notepad.exe"
+
+        SYSTEM32_DESC="$(file -b "$PREFIX/drive_c/windows/system32/notepad.exe")"
+        SYSWOW64_DESC="$(file -b "$PREFIX/drive_c/windows/syswow64/notepad.exe")"
+        case "$SYSTEM32_DESC" in
+            *PE32+*x86-64*) ;;
+            *) die "existing prefix system32 architecture mismatch" ;;
+        esac
+        case "$SYSWOW64_DESC" in
+            *PE32*Intel*i386*) ;;
+            *) die "existing prefix syswow64 architecture mismatch" ;;
+        esac
+
+        [ ! -e "$MU_DIR" ] ||
+            die "MU is already present; refusing to repeat official installation"
+        if grep -Fiq 'GGKernel64' "$PREFIX/system.reg"; then
+            die "existing prefix is not pristine: GGKernel64 registry entry present"
+        fi
+        GG_FOUND="$(find "$PREFIX/drive_c" -type f -iname GGKernel64.sys -print -quit)"
+        [ -z "$GG_FOUND" ] ||
+            die "existing prefix is not pristine: GameGuard driver present"
+        printf 'V020_EXISTING_PREFIX_PRISTINE=True\n'
+    fi
+
+    [ -d "$BUILD" ] && [ -f "$BUILD/Makefile" ] &&
+        [ -f "$BUILD/config.status" ] ||
+        die "previously configured Wine build missing: $BUILD"
+
+    [ -x "$RUNTIME/bin/wine" ] &&
+        [ -x "$RUNTIME/bin/wineboot" ] &&
+        [ -x "$RUNTIME/bin/wineserver" ] ||
+        die "previously installed private Wine runtime is incomplete"
+
+    [ "$("$RUNTIME/bin/wine" --version)" = "wine-$WINE_VERSION" ] ||
+        die "private Wine version mismatch"
+
+    # Recheck pinned patch files without modifying the patched source.
+    [ -d "$REPO_ROOT/patches" ] || die "patch directory missing"
+    for I in "${!PATCH_NAMES[@]}"; do
+        PATCH="$REPO_ROOT/patches/${PATCH_NAMES[$I]}"
+        [ -f "$PATCH" ] || die "missing pinned patch: $PATCH"
+        ACTUAL="$(sha256sum "$PATCH" | awk '{print $1}')"
+        [ "$ACTUAL" = "${PATCH_SHA256[$I]}" ] ||
+            die "pinned patch checksum mismatch: $PATCH"
+    done
+
+    log "Verify installed Wine artifacts are identical to build outputs"
+    PAIRS=(
+        "dlls/ntdll/ntdll.so|lib/wine/x86_64-unix/ntdll.so"
+        "dlls/ntdll/i386-windows/ntdll.dll|lib/wine/i386-windows/ntdll.dll"
+        "dlls/ntdll/x86_64-windows/ntdll.dll|lib/wine/x86_64-windows/ntdll.dll"
+        "dlls/kernelbase/i386-windows/kernelbase.dll|lib/wine/i386-windows/kernelbase.dll"
+        "dlls/kernelbase/x86_64-windows/kernelbase.dll|lib/wine/x86_64-windows/kernelbase.dll"
+        "dlls/ntoskrnl.exe/i386-windows/ntoskrnl.exe|lib/wine/i386-windows/ntoskrnl.exe"
+        "dlls/ntoskrnl.exe/x86_64-windows/ntoskrnl.exe|lib/wine/x86_64-windows/ntoskrnl.exe"
+        "dlls/winepulse.drv/winepulse.so|lib/wine/x86_64-unix/winepulse.so"
+        "dlls/winealsa.drv/winealsa.so|lib/wine/x86_64-unix/winealsa.so"
+    )
+    for PAIR in "${PAIRS[@]}"; do
+        BUILD_REL="${PAIR%%|*}"
+        RUNTIME_REL="${PAIR#*|}"
+        cmp -s -- "$BUILD/$BUILD_REL" "$RUNTIME/$RUNTIME_REL" ||
+            die "runtime/build mismatch: $RUNTIME_REL"
+        printf 'IDENTICAL %s\n' "$RUNTIME_REL"
+    done
+    printf 'V020_EXISTING_RUNTIME_VERIFIED=True\n'
+
+    [ -d "$LOG_DIR" ] ||
+        die "missing existing log directory: $LOG_DIR"
+
+    progress_begin
+    if [ "$RESUME_FROM_PREFIX" -eq 1 ]; then
+        PROGRESS_DONE=6
+    else
+        PROGRESS_DONE=5
+    fi
+else
 log "Platform preflight"
 
 [ "$(uname -s)" = "Linux" ] ||
@@ -607,6 +837,15 @@ log "Platform preflight"
 
 printf 'Distribution: %s\n' "${PRETTY_NAME:-unknown}"
 printf 'Architecture: %s\n' "$(uname -m)"
+
+# v0.2.0: independent platform, package manager and build validation.
+# The legacy recipes for Fedora/Nobara and Ubuntu remain unchanged.
+# shellcheck source=lib/platform-detect.sh
+. "$SCRIPT_DIR/lib/platform-detect.sh"
+mu_detect_platform || die "platform detection failed"
+mu_platform_report
+# shellcheck source=lib/consent.sh
+. "$SCRIPT_DIR/lib/consent.sh"
 
 case "${ID:-}" in
     fedora)
@@ -638,10 +877,36 @@ case "${ID:-}" in
         fi
         ;;
 
+    cachyos)
+        # CachyOS uses the E2E-tested native Pacman dependency recipe.
+        DISTRO_FAMILY="portable"
+        DISTRO_VERSION="${VERSION_ID:-}"
+        [ "$MU_DISTRO_STATUS" = verified ] ||
+            echo "WARNING: CachyOS environment differs from tested rolling-release reference."
+        ;;
+
     *)
-        die "supported distributions are currently Fedora and Ubuntu"
+        # An unknown distro is not a fatal error by itself. The independent
+        # build validator decides whether compilation prerequisites exist.
+        DISTRO_FAMILY="portable"
+        DISTRO_VERSION="${VERSION_ID:-}"
+        echo "WARNING: unverified distribution; dependency setup will be selected separately."
         ;;
 esac
+
+# Explicit consent before any package or Wine operation on unverified OS.
+# Read-only --deps-only deliberately needs no confirmation.
+if [ "$DEPS_ONLY" -eq 0 ] &&
+   [ "$MU_DISTRO_STATUS" != verified ]; then
+    if [ ! -t 0 ] || [ ! -t 1 ]; then
+        die "unverified distribution requires interactive confirmation"
+    fi
+    printf '\nUnverified distribution: %s\n' "${PRETTY_NAME:-unknown}"
+    printf '%s\n' "MU Online compatibility and GameGuard have not been validated here."
+    read -r -p 'Type CONTINUE to proceed with experimental installation: ' CONSENT ||
+        die "confirmation not received"
+    mu_consent_matches "$CONSENT" CONTINUE || die "experimental installation not approved"
+fi
 
 log "Repository validation"
 
@@ -705,10 +970,14 @@ do
 done
 
 if [ "${#MISSING_COMMANDS[@]}" -gt 0 ] &&
-   [ "$SKIP_DEPS" -eq 1 ]
+   [ "$SKIP_DEPS" -eq 1 ] &&
+   [ "$DEPS_ONLY" -eq 0 ]
 then
     die "required build commands are missing and --skip-deps was requested"
 fi
+
+# --deps-only must reach the independent validator even when tools are
+# absent; only the validator can provide the complete missing dependency list.
 
 log "Configuration"
 
@@ -920,6 +1189,19 @@ if [ "$SKIP_DEPS" -eq 0 ]; then
                 "${UBUNTU_PACKAGES[@]}"
             ;;
 
+        portable)
+            # A detected package manager is not automatically a tested recipe.
+            # Unverified distributions receive a single CONTINUE prompt above.
+            if [ "$MU_PKG_BACKEND" = pacman ] &&
+               [ "$MU_PKG_RECIPE" = cachyos-v020 ]; then
+                bash "$SCRIPT_DIR/pacman-deps-prepare.sh" --install ||
+                    die "CachyOS pacman dependency setup failed"
+            else
+                bash "$SCRIPT_DIR/manual-deps-prepare.sh" --interactive ||
+                    die "manual dependency preparation did not complete"
+            fi
+            ;;
+
         *)
             die "internal error: unknown dependency backend"
             ;;
@@ -1011,6 +1293,12 @@ case "$DISTRO_FAMILY" in
             /usr/lib/i386-linux-gnu/pkgconfig/alsa.pc
         )
         ;;
+
+    portable)
+        # No hardcoded library paths for unverified distributions.
+        # The common validator below compiles and links the 32-bit ABI.
+        AUDIO_PC_FILES=()
+        ;;
 esac
 
 for PC_FILE in "${AUDIO_PC_FILES[@]}"; do
@@ -1018,6 +1306,12 @@ for PC_FILE in "${AUDIO_PC_FILES[@]}"; do
         die "required audio development file missing: $PC_FILE"
     printf 'OK      %s\n' "$PC_FILE"
 done
+
+# Mandatory for --skip-deps too: skip installation, never skip validation.
+log "Independent build/link/ABI validation"
+bash "$SCRIPT_DIR/build-env-audit.sh" ||
+    die "independent build environment audit failed"
+printf 'V020_BUILD_ENV_AUDIT_PASS=True\n'
 
 printf '\nINSTALLER_STAGE_2A_DISTRO_DEPS_PASS=True\n'
 
@@ -1032,6 +1326,12 @@ case "$DISTRO_FAMILY" in
 esac
 
 progress_stage_complete "System dependencies"
+
+if [ "$DEPS_ONLY" -eq 1 ]; then
+    printf '\nV020_INSTALLER_DEPENDENCIES_ONLY_PASS=True\n'
+    echo 'No Wine download, compilation, prefix or game installation was started.'
+    exit 0
+fi
 
 # === MU_INSTALLER_STAGE_2A_DISTRO_DEPS_END ===
 
@@ -1554,6 +1854,15 @@ printf '\nINSTALLER_STAGE_2C_CONFIGURE_PASS=True\n'
 
 progress_stage_complete "Configure Wine 11.6"
 
+if [ "$CONFIGURE_ONLY" -eq 1 ]; then
+    printf '\nV020_WINE_CONFIGURE_ONLY_PASS=True\n'
+    printf 'SOURCE_REUSABLE=%s\n' "$SOURCE"
+    printf 'BUILD_REUSABLE=%s\n' "$BUILD"
+    echo 'Wine was configured, but no compilation, runtime installation,'
+    echo 'Wine prefix creation or MU Online installation was started.'
+    exit 0
+fi
+
 # === MU_INSTALLER_STAGE_2C_CONFIGURE_END ===
 
 # === MU_INSTALLER_STAGE_2D_BUILD_BEGIN ===
@@ -1573,10 +1882,14 @@ log "Build Wine ${WINE_VERSION} WoW64"
 [ ! -e "$RUNTIME" ] ||
     die "runtime already exists before compilation: $RUNTIME"
 
-JOBS="$(
-    nproc 2>/dev/null ||
-        printf '1\n'
-)"
+if [ -n "$BUILD_JOBS_OVERRIDE" ]; then
+    JOBS="$BUILD_JOBS_OVERRIDE"
+else
+    JOBS="$(
+        nproc 2>/dev/null ||
+            printf '1\n'
+    )"
+fi
 
 case "$JOBS" in
     ''|*[!0-9]*)
@@ -1780,6 +2093,16 @@ printf 'PREFIX_CREATED=False\n'
 printf '\nINSTALLER_STAGE_2D_BUILD_PASS=True\n'
 
 progress_stage_complete "Build Wine 11.6"
+
+if [ "$BUILD_ONLY" -eq 1 ]; then
+    printf '\nV020_WINE_BUILD_ONLY_PASS=True\n'
+    printf 'SOURCE_REUSABLE=%s\n' "$SOURCE"
+    printf 'BUILD_REUSABLE=%s\n' "$BUILD"
+    printf 'BUILD_LOG=%s\n' "$BUILD_LOG"
+    echo 'Wine compilation and build-artifact validation completed.'
+    echo 'No make install, Wine prefix creation or MU installation was started.'
+    exit 0
+fi
 
 # === MU_INSTALLER_STAGE_2D_BUILD_END ===
 
@@ -1993,7 +2316,20 @@ printf '\nINSTALLER_STAGE_2E_RUNTIME_INSTALL_PASS=True\n'
 
 progress_stage_complete "Install private Wine runtime"
 
+if [ "$RUNTIME_ONLY" -eq 1 ]; then
+    printf '\nV020_WINE_RUNTIME_ONLY_PASS=True\n'
+    printf 'RUNTIME_READY=%s\n' "$RUNTIME"
+    printf 'RUNTIME_INSTALL_LOG=%s\n' "$INSTALL_LOG"
+    echo 'Private Wine runtime installed and checked against build artifacts.'
+    echo 'No prefix creation, MU Online installation or GameGuard startup was attempted.'
+    exit 0
+fi
+
 # === MU_INSTALLER_STAGE_2E_RUNTIME_INSTALL_END ===
+fi # V020_PREFIX_ONLY_BYPASS_PREVIOUS_INSTALL_STAGES
+
+
+if [ "$RESUME_FROM_PREFIX" -eq 0 ]; then
 
 # === MU_INSTALLER_STAGE_3A_FRESH_PREFIX_BEGIN ===
 
@@ -2202,25 +2538,29 @@ fi
 
 printf 'FIRST_WINEBOOT_RUNTIME_OWNERSHIP_OK=True\n'
 
-log "Stop prefix cleanly after initialization"
+log "Wait for Wine prefix initialization to finish"
 
-env \
+# wineboot -u can exit successfully while Wine services are still populating
+# the new prefix, including the 32-bit SysWOW64 directory. Never call
+# wineserver -k on the successful initialization path: it can interrupt
+# that work and leave an incomplete WoW64 prefix.
+if timeout 300 env \
     WINEPREFIX="$PREFIX" \
     PATH="$PINNED_PATH" \
     WINESERVER="$RUNTIME/bin/wineserver" \
-    "$RUNTIME/bin/wineserver" \
-    -k \
-    2>/dev/null ||
-    true
-
-env \
-    WINEPREFIX="$PREFIX" \
-    PATH="$PINNED_PATH" \
-    WINESERVER="$RUNTIME/bin/wineserver" \
+    WINEDEBUG=-all \
     "$RUNTIME/bin/wineserver" \
     -w \
-    2>/dev/null ||
-    die "wineserver did not stop cleanly"
+    >>"$WINEBOOT_LOG" 2>&1
+then
+    printf 'PREFIX_WINESERVER_WAIT_RC=0\n'
+else
+    PREFIX_WINESERVER_WAIT_RC=$?
+    printf 'PREFIX_WINESERVER_WAIT_RC=%s\n' "$PREFIX_WINESERVER_WAIT_RC"
+    printf '\n--- WINEBOOT LOG TAIL ---\n'
+    tail -n 120 "$WINEBOOT_LOG" || true
+    die "prefix initialization did not finish cleanly (wineserver -w rc=$PREFIX_WINESERVER_WAIT_RC)"
+fi
 
 printf 'PREFIX_WINESERVER_STOPPED=True\n'
 
@@ -2348,6 +2688,15 @@ printf 'PINNED_RUNTIME_FROM_FIRST_WINEBOOT=True\n'
 progress_stage_complete "Create Wine prefix"
 
 # === MU_INSTALLER_STAGE_3A_FRESH_PREFIX_END ===
+
+if [ "$PREFIX_ONLY" -eq 1 ]; then
+    printf '\nV020_WINE_PREFIX_ONLY_PASS=True\n'
+    printf 'PREFIX_READY=%s\n' "$PREFIX"
+    echo 'Pristine private WoW64 Wine prefix initialized; MU remains uninstalled.'
+    exit 0
+fi
+
+fi # V020_SKIP_PREFIX_INITIALIZATION_WHEN_RESUMING
 
 # === MU_INSTALLER_STAGE_3B_OFFICIAL_MU_INSTALL_BEGIN ===
 

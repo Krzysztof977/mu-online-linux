@@ -3,8 +3,8 @@
 set -Eeuo pipefail
 
 PROJECT="mu-online-linux"
-VERSION="0.1.1"
-TAG="v0.1.1"
+VERSION="0.2.0"
+TAG="v0.2.0"
 
 OWNER="Krzysztof977"
 REPOSITORY="mu-online-linux"
@@ -18,7 +18,12 @@ RELEASE_BASE="${URL_SCHEME}//github.com/${OWNER}/${REPOSITORY}/releases/download
 ARCHIVE_URL="${RELEASE_BASE}/${ARCHIVE}"
 CHECKSUM_URL="${RELEASE_BASE}/${CHECKSUM_FILE}"
 
-EXPECTED_SHA256="17b5335d5153fbe9ed1036cb780cb656273cdce38c16cdf3ba69c8d45ad8a540"
+# Release archive generated from source commit:
+# a0318ca5dc665e115b6fd429214bfc79618d9b73
+# Using 'git archive HEAD' after this bootstrap commit changes the TAR
+# PAX commit metadata, even though bootstrap.sh is excluded. Keep the
+# audited release archive rather than regenerating it from the tag.
+EXPECTED_SHA256="c0b2e7bdcb900eba9c3aaf6e183e5ac1932ab79e88e3b1aec81df3c7406ea81e"
 
 WORKDIR=""
 CLEANUP_DONE=0

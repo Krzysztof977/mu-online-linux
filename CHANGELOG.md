@@ -2,6 +2,45 @@
 
 All notable project changes intended for public releases are recorded here.
 
+## 0.2.0 — CachyOS / Pacman support
+
+### Added
+- CachyOS rolling-release discovery, native Pacman backend and 40-root
+  dependency recipe including multilib and Vulkan headers.
+- Automatic missing-package installation with the verified CachyOS recipe
+  using Pacman's native transaction confirmation, and independent native,
+  i386/x86_64 MinGW, graphics, GnuTLS and audio ABI validation.
+- No hard-coded distribution allowlist: a Linux x86_64 system with an
+  untested distribution ID is not rejected solely by its OS name.
+  Instead, the installer classifies it as unverified and offers an
+  experimental path after the user types `CONTINUE` (also accepts
+  `continue`, case-insensitively). Build/toolchain/ABI verification is
+  mandatory; missing or unsupported dependencies still block installation.
+- A single case-insensitive `CONTINUE` consent for unverified distributions;
+  no redundant package-manager or assisted-manual consent prompt.
+- Assisted-manual dependency recheck after Enter when no verified
+  automatic package recipe exists.
+- Build/configure/runtime/prefix validation checkpoints and guarded
+  --resume-from-prefix mode.
+- --jobs N option for controlling Wine build parallelism on low-RAM VMs.
+
+### Verified
+- 2026-11-08: CachyOS x86_64 on a fresh KVM/QEMU VM; the installer
+  detected five missing package roots, ran the native Pacman dependency
+  transaction, and the user confirmed the full MU Online/game launch worked.
+- Dependency-routing, platform-detection, consent and negative-safety tests
+  passed on the test CachyOS VM after the final consent-flow changes.
+- Patched Wine 11.6 source, full WoW64 build, private runtime installation,
+  pristine prefix creation and nine matched build/runtime artifacts.
+
+### Boundaries
+- CachyOS is verified for the tested rolling-release environment, not
+  every future rolling snapshot or GPU/driver combination.
+- Generic Arch derivatives and Gentoo are not yet fully E2E verified.
+- Previous v0.1.1 tag and archived release remain unchanged.
+- Four Wine compatibility patches are unchanged.
+- Proprietary MU Online and GameGuard binaries remain user-supplied.
+
 ## 0.1.1 — Nobara Linux 44 support
 
 ### Added

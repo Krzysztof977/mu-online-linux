@@ -17,6 +17,7 @@ Full end-to-end installation and game launch have been verified on:
 - Fedora 44 x86_64
 - Kubuntu 26.04.1 x86_64, based on Ubuntu 26.04
 - Nobara Linux 44 x86_64
+- CachyOS x86_64 (rolling release; verified for v0.2.0)
 
 The verified path includes:
 
@@ -77,11 +78,12 @@ GameGuard remains responsible for supplying and managing its own driver file.
 
 ## Supported distributions
 
-The installer currently supports:
-
-- Fedora
-- Nobara Linux (`ID=nobara`, Fedora/DNF backend)
-- Ubuntu and Ubuntu-based systems reporting `ID=ubuntu`
+**v0.2.0** retains the tested Fedora, Nobara Linux (`ID=nobara`,
+Fedora/DNF backend), and Ubuntu (`ID=ubuntu`, APT backend) installation
+paths from v0.1.1. It adds CachyOS with a native Pacman backend, a
+40-root package recipe, multilib and compiler/ABI preflight checks.
+Generic Arch derivatives and Gentoo are **not** automatically granted
+CachyOS support.
 
 Fully tested reference systems:
 
@@ -90,12 +92,14 @@ Fully tested reference systems:
 | Fedora 44 | x86_64 | Full E2E verified |
 | Nobara Linux 44 | x86_64 | Full E2E verified |
 | Kubuntu 26.04.1 / Ubuntu 26.04 base | x86_64 | Full E2E verified |
+| CachyOS rolling release (tested on KVM/QEMU, 2026-11-08) | x86_64 | Full E2E verified for v0.2.0 |
 
 Fedora and Nobara releases other than 44, and Ubuntu releases other
 than 26.04, are not currently reference-tested.
 
-Other distribution families such as Arch Linux and openSUSE are not yet
-supported by the installer.
+Other distribution families, including generic Arch Linux and openSUSE,
+are not yet validated by this project's automatic installer. Gentoo uses
+manual dependency preparation in v0.2.0 and has not been E2E tested.
 
 ## Requirements
 
@@ -111,14 +115,90 @@ The MU Online installer is not included in this repository.
 
 ## Installation
 
+### CachyOS — v0.2.0 (E2E tested)
+
+CachyOS support is introduced in v0.2.0; it is not included in the
+v0.1.1 release. Download the official MU Online Windows installer
+separately. On CachyOS x86_64 with multilib enabled, use the v0.2.0
+tagged source release:
+
+~~~bash
+git clone --branch v0.2.0 \
+    https://github.com/Krzysztof977/mu-online-linux.git
+cd mu-online-linux
+bash scripts/install.sh --installer "/path/to/official-MU-installer.exe"
+~~~
+
+The installer identifies CachyOS, checks the native Pacman backend and
+the verified `cachyos-v020` package recipe, and installs missing dependency
+roots using `pacman -S --needed` with Pacman's normal transaction confirmation.
+There is no redundant installer-specific `Type INSTALL` prompt on CachyOS.
+It does **not** run `pacman -Sy` or silently upgrade the system.
+It then builds patched Wine 11.6, creates a private WoW64 prefix, runs
+the official MU installer, and configures the launcher. On a VM with
+limited RAM, add `--jobs 2` to limit parallel compilation.
+
+The reported end-to-end CachyOS test used KVM/QEMU, six virtual Ryzen
+cores, approximately 5.78 GiB RAM, and completed a clean end-user
+installation and game launch on November 8, 2026. This verification
+does not imply that other Arch-based distributions or GPU/driver
+combinations are already validated.
+
+### Other distributions — unverified v0.2.0 path
+
+**There is no hard-coded Linux distribution allowlist.** On a distribution
+that has not passed end-to-end testing, the v0.2.0 installer does not refuse
+installation merely because the OS name is unfamiliar. It identifies the
+platform and available package manager, marks the OS as **unverified**, and
+requires an explicit interactive confirmation before continuing.
+
+Run the development installer normally with your own official MU Online
+Windows installer:
+
+~~~bash
+bash scripts/install.sh --installer "/path/to/official-MU-installer.exe"
+~~~
+
+When prompted on an unverified system:
+
+~~~text
+Type CONTINUE to proceed with experimental installation:
+~~~
+
+Type **`continue`** and press Enter. `CONTINUE` and other letter-case
+variants are accepted; an empty answer, spaces added around the word, or a
+different answer is rejected. This is an **opt-in to testing**, not a claim
+that your distribution is already supported. The installer asks for
+distribution-level consent **once**, with no second consent prompt from the
+package-manager or manual-dependency helper.
+
+Automatic package names are chosen only when the distribution has a tested
+recipe: DNF on Fedora/Nobara, APT on Ubuntu, and Pacman on CachyOS. Merely
+detecting Pacman on Arch Linux does not authorize CachyOS package names.
+When there is no tested recipe, the installer runs an assisted-manual
+dependency audit. Install any missing prerequisites with your native package
+manager, press Enter to check again (or Q to quit), and continue only after
+all required compiler, 32-bit ABI and library checks pass.
+
+**Important limitations:** Linux and x86_64 are still required. The
+installer must also pass its checks for required build commands, compiler
+and linker output, 32/64-bit ABI, graphics, networking and audio libraries.
+Unknown or unsupported package-manager recipes use guided **manual
+dependency preparation** rather than guessing package names; missing
+dependencies or failed checks stop installation. The consent prompt
+requires an interactive terminal. The installer does not bypass GameGuard
+or guarantee that MU Online works on an untested distribution.
+
+### Stable v0.1.1 — Fedora, Nobara, and Ubuntu
+
 For version 0.1.1, the recommended entry point is the tagged bootstrap
 script. The official MU Online Windows installer must already be downloaded
 separately from Webzen and present locally.
 
 Before installing:
 
-1. Supply the actual path to the official MU Online installer on your
-   computer instead of `/path/to/official-MU-installer.exe`. Keep the path in
+1. Replace `/path/to/official-MU-installer.exe` with the actual path to
+   the official MU Online installer on your computer. Keep the path in
    quotes, especially if it contains spaces.
 2. The full installation can take **30 minutes or more**, depending on CPU
    performance, storage speed, network speed, and package download times.
@@ -588,13 +668,15 @@ references and carry notices identifying that status.
 
 ## Release status
 
-Version 0.1.1 uses the following publication layout:
+Version 0.2.0 uses the same publication layout established by v0.1.1:
 
 - repository: `https://github.com/Krzysztof977/mu-online-linux`
-- tag: `v0.1.1`
-- release archive: `mu-online-linux-0.1.1.tar.gz`
+- tag: `v0.2.0`
+- release archive: `mu-online-linux-0.2.0.tar.gz`
 - checksum asset: `SHA256SUMS`
 - tagged bootstrap: `bootstrap.sh`
+
+The v0.1.1 tag and release assets remain available without modification.
 
 The versioned release archive contains the distributable project code,
 patches, licensing material and documentation. It does not contain
