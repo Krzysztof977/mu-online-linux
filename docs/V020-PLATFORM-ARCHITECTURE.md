@@ -33,6 +33,7 @@ bash tests/test-v020-dependencies.sh
 bash scripts/v020-dependencies.sh --check
 bash tests/test-install-deps-only.sh
 bash scripts/install.sh --deps-only
+bash tests/test-configure-only.sh
 ```
 
 These commands do not invoke sudo, install packages, update repositories,
@@ -142,3 +143,22 @@ remain pending, including a fresh VM Pacman transaction.
 Safety policy: a detected package manager does **not** imply a validated
 recipe. A non-CachyOS Arch derivative uses manual setup until its recipe
 has been independently verified. The `--check` mode never changes packages.
+
+## Experimental Wine configure-only checkpoint
+
+`bash scripts/install.sh --configure-only --base PATH` (development branch
+only) requires no official MU Windows installer. It runs platform detection,
+source/patch SHA verification, the dependency/ABI checks, then downloads
+and verifies Wine 11.6 source, applies four pinned patches and executes
+Wine configure with `--enable-archs=i386,x86_64`.
+The script exits **before** make, private-runtime installation, prefix
+creation and game installation. It prints
+`V020_WINE_CONFIGURE_ONLY_PASS=True` on success.
+It preserves the configured build directory under the chosen base for the
+normal full installer, which can validate and reuse it later.
+
+**This mode does modify its private workspace and downloads Wine sources.**
+Only `--deps-only` is read-only. The configure-only mode should be run in a
+fresh test workspace; verify free disk space and the existing release's
+`configure` checks. The full installer is not yet end-to-end verified
+on CachyOS.
