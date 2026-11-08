@@ -6,6 +6,8 @@ set -euo pipefail
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=lib/platform-detect.sh
 . "$SCRIPT_DIR/lib/platform-detect.sh"
+# shellcheck source=lib/consent.sh
+. "$SCRIPT_DIR/lib/consent.sh"
 
 mode="${1:---check}"
 if (( $# > 1 )); then
@@ -52,7 +54,7 @@ if [[ "$mode" == --interactive && "$MU_DISTRO_STATUS" != verified ]]; then
     echo 'The following checks only validate build prerequisites; they do not'
     echo 'prove that Wine and the game will work on this distribution.'
     read -r -p 'Type CONTINUE to enter assisted-manual setup: ' consent || exit 3
-    if [[ "$consent" != CONTINUE ]]; then
+    if ! mu_consent_matches "$consent" CONTINUE; then
         echo 'MANUAL_SETUP_CANCELLED=True'
         exit 3
     fi
