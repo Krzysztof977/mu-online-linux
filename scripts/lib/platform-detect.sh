@@ -43,8 +43,11 @@ mu_detect_platform() {
     MU_PKG_RECIPE="unavailable"
     MU_BUILD_ENV_STATUS="not_checked"
 
+    # CachyOS is rolling-release and normally omits VERSION_ID.
+    # Only the verified native CachyOS (ID=cachyos, no VERSION_ID)
+    # receives the E2E-tested status; other Arch derivatives stay unverified.
     case "$MU_DISTRO_ID:$MU_DISTRO_VERSION" in
-        fedora:44|nobara:44|ubuntu:26.04)
+        fedora:44|nobara:44|ubuntu:26.04|cachyos:)
             MU_DISTRO_STATUS="verified" ;;
     esac
 
@@ -87,11 +90,12 @@ mu_detect_platform() {
             fi ;;
     esac
 
-    # Package recipes are not inferred from ID_LIKE.
-    # Arch/CachyOS recipe is intentionally pending implementation.
+    # Recipes are assigned only to explicitly tested ID/backend pairs.
+    # A generic Arch derivative is not granted the CachyOS recipe.
     case "$MU_DISTRO_ID:$MU_PKG_BACKEND" in
         fedora:dnf|nobara:dnf) MU_PKG_RECIPE="fedora-v011" ;;
         ubuntu:apt) MU_PKG_RECIPE="ubuntu-v011" ;;
+        cachyos:pacman) MU_PKG_RECIPE="cachyos-v020" ;;
     esac
 }
 
