@@ -50,6 +50,8 @@ INSTALLER=""
 SKIP_DEPS=0
 DEPS_ONLY=0
 CONFIGURE_ONLY=0
+BUILD_ONLY=0
+BUILD_JOBS_OVERRIDE=""
 
 usage()
 {
@@ -65,6 +67,8 @@ Options:
   --deps-only        Read-only dependency validation; no MU installer needed.
   --configure-only   Verify/patch Wine source and run configure only.
                      No MU installer, build, runtime or prefix required.
+  --build-only       Configure and compile Wine without installing runtime or MU.
+  --jobs N           Parallel make jobs (default: nproc).
   -h, --help         Show this help.
 
 The script installs a private Wine runtime and a separate Wine prefix.
@@ -564,6 +568,18 @@ do
             shift
             ;;
 
+        --build-only)
+            BUILD_ONLY=1
+            SKIP_DEPS=1
+            shift
+            ;;
+
+        --jobs)
+            [ "$#" -ge 2 ] || die "--jobs requires a positive integer"
+            BUILD_JOBS_OVERRIDE="$2"
+            shift 2
+            ;;
+
         -h|--help)
             usage
             exit 0
@@ -579,7 +595,22 @@ if [ "$DEPS_ONLY" -eq 1 ] && [ "$CONFIGURE_ONLY" -eq 1 ]; then
     die "--deps-only and --configure-only cannot be combined"
 fi
 
-if [ "$DEPS_ONLY" -eq 0 ] && [ "$CONFIGURE_ONLY" -eq 0 ]; then
+if [ "$BUILD_ONLY" -eq 1 ] &&
+   { [ "$DEPS_ONLY" -eq 1 ] || [ "$CONFIGURE_ONLY" -eq 1 ]; }; then
+    die "--build-only cannot be combined with --deps-only or --configure-only"
+fi
+
+if [ -n "$BUILD_JOBS_OVERRIDE" ]; then
+    case "$BUILD_JOBS_OVERRIDE" in
+        *[!0-9]*|'') die "--jobs requires a positive integer" ;;
+    esac
+    [ "$BUILD_JOBS_OVERRIDE" -ge 1 ] 2>/dev/null ||
+        die "--jobs requires a positive integer"
+fi
+
+if [ "$DEPS_ONLY" -eq 0 ] &&
+   [ "$CONFIGURE_ONLY" -eq 0 ] &&
+   [ "$BUILD_ONLY" -eq 0 ]; then
     [ -n "$INSTALLER" ] || {
         usage
         die "official MU installer path is required"
@@ -1669,10 +1700,14 @@ log "Build Wine ${WINE_VERSION} WoW64"
 [ ! -e "$RUNTIME" ] ||
     die "runtime already exists before compilation: $RUNTIME"
 
-JOBS="$(
-    nproc 2>/dev/null ||
-        printf '1\n'
-)"
+if [ -n "$BUILD_JOBS_OVERRIDE" ]; then
+    JOBS="$BUILD_JOBS_OVERRIDE"
+else
+    JOBS="$(
+        nproc 2>/dev/null ||
+            printf '1\n'
+    )"
+fi
 
 case "$JOBS" in
     ''|*[!0-9]*)
@@ -1876,6 +1911,16 @@ printf 'PREFIX_CREATED=False\n'
 printf '\nINSTALLER_STAGE_2D_BUILD_PASS=True\n'
 
 progress_stage_complete "Build Wine 11.6"
+
+if [ "$BUILD_ONLY" -eq 1 ]; then
+    printf '\nV020_WINE_BUILD_ONLY_PASS=True\n'
+    printf 'SOURCE_REUSABLE=%s\n' "$SOURCE"
+    printf 'BUILD_REUSABLE=%s\n' "$BUILD"
+    printf 'BUILD_LOG=%s\n' "$BUILD_LOG"
+    echo 'Wine compilation and build-artifact validation completed.'
+    echo 'No make install, Wine prefix creation or MU installation was started.'
+    exit 0
+fi
 
 # === MU_INSTALLER_STAGE_2D_BUILD_END ===
 
