@@ -162,3 +162,12 @@ Only `--deps-only` is read-only. The configure-only mode should be run in a
 fresh test workspace; verify free disk space and the existing release's
 `configure` checks. The full installer is not yet end-to-end verified
 on CachyOS.
+
+## Case-insensitive explicit confirmations
+
+The development branch accepts `CONTINUE` and `INSTALL` regardless of
+letter case (`continue`, `Continue`, `install`, etc.). Empty values,
+extra spaces and other words still fail. The same shared helper is used
+for the main installer, manual dependency assistant and pacman installer.
+Run `bash tests/test-consent.sh` for regression checks. This does not
+change a process that has already started from an older checkout.
