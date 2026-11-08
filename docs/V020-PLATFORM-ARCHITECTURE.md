@@ -201,3 +201,24 @@ This stage changes private workspace files and can use substantial disk space.
 Run `bash tests/test-runtime-only.sh` (read-only) before attempting it.
 If a private runtime already exists, installation refuses to overwrite it.
 This is experimental and not a full release installation.
+
+## Experimental prefix-only checkpoint: no repeat build or install
+
+The CachyOS VM has now compiled Wine 11.6 and installed the verified private
+runtime. The `--prefix-only` mode uses the existing runtime directly:
+`bash scripts/install.sh --prefix-only --base PATH`. It checks the existing
+Wine version, pinned patch hashes, all nine build/runtime artifact pairs,
+and the absence of a pre-existing prefix. It then executes the original
+stage 3A first-`wineboot` code and preserves its verification of runtime
+ownership, 32/64-bit prefix structure and GameGuard absence.
+It exits immediately after stage 3A, before MU Online installation.
+
+The prefix-only path deliberately skips Wine source extraction, `configure`,
+`make`, and `make install`; it still requires explicit consent for
+unverified distributions. Do not run it again after a successful prefix
+creation: it refuses to overwrite an existing prefix.
+Run `bash tests/test-prefix-only.sh` before the first real attempt.
+
+Note: this standalone checkpoint does not yet make the normal full installer
+resume automatically from an existing runtime/prefix. Such reuse needs a
+separate, carefully tested path to avoid silent modifications or loss of data.
