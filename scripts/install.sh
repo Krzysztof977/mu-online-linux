@@ -51,6 +51,7 @@ SKIP_DEPS=0
 DEPS_ONLY=0
 CONFIGURE_ONLY=0
 BUILD_ONLY=0
+RUNTIME_ONLY=0
 BUILD_JOBS_OVERRIDE=""
 
 usage()
@@ -68,6 +69,7 @@ Options:
   --configure-only   Verify/patch Wine source and run configure only.
                      No MU installer, build, runtime or prefix required.
   --build-only       Configure and compile Wine without installing runtime or MU.
+  --runtime-only     Install and verify private Wine without creating prefix or MU.
   --jobs N           Parallel make jobs (default: nproc).
   -h, --help         Show this help.
 
@@ -574,6 +576,12 @@ do
             shift
             ;;
 
+        --runtime-only)
+            RUNTIME_ONLY=1
+            SKIP_DEPS=1
+            shift
+            ;;
+
         --jobs)
             [ "$#" -ge 2 ] || die "--jobs requires a positive integer"
             BUILD_JOBS_OVERRIDE="$2"
@@ -600,6 +608,12 @@ if [ "$BUILD_ONLY" -eq 1 ] &&
     die "--build-only cannot be combined with --deps-only or --configure-only"
 fi
 
+if [ "$RUNTIME_ONLY" -eq 1 ] &&
+   { [ "$DEPS_ONLY" -eq 1 ] || [ "$CONFIGURE_ONLY" -eq 1 ] ||
+     [ "$BUILD_ONLY" -eq 1 ]; }; then
+    die "--runtime-only cannot be combined with other --*-only modes"
+fi
+
 if [ -n "$BUILD_JOBS_OVERRIDE" ]; then
     case "$BUILD_JOBS_OVERRIDE" in
         *[!0-9]*|'') die "--jobs requires a positive integer" ;;
@@ -610,7 +624,8 @@ fi
 
 if [ "$DEPS_ONLY" -eq 0 ] &&
    [ "$CONFIGURE_ONLY" -eq 0 ] &&
-   [ "$BUILD_ONLY" -eq 0 ]; then
+   [ "$BUILD_ONLY" -eq 0 ] &&
+   [ "$RUNTIME_ONLY" -eq 0 ]; then
     [ -n "$INSTALLER" ] || {
         usage
         die "official MU installer path is required"
@@ -2133,6 +2148,15 @@ printf 'PREFIX_CREATED=False\n'
 printf '\nINSTALLER_STAGE_2E_RUNTIME_INSTALL_PASS=True\n'
 
 progress_stage_complete "Install private Wine runtime"
+
+if [ "$RUNTIME_ONLY" -eq 1 ]; then
+    printf '\nV020_WINE_RUNTIME_ONLY_PASS=True\n'
+    printf 'RUNTIME_READY=%s\n' "$RUNTIME"
+    printf 'RUNTIME_INSTALL_LOG=%s\n' "$INSTALL_LOG"
+    echo 'Private Wine runtime installed and checked against build artifacts.'
+    echo 'No prefix creation, MU Online installation or GameGuard startup was attempted.'
+    exit 0
+fi
 
 # === MU_INSTALLER_STAGE_2E_RUNTIME_INSTALL_END ===
 
