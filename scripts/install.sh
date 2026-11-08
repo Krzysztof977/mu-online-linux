@@ -742,10 +742,14 @@ do
 done
 
 if [ "${#MISSING_COMMANDS[@]}" -gt 0 ] &&
-   [ "$SKIP_DEPS" -eq 1 ]
+   [ "$SKIP_DEPS" -eq 1 ] &&
+   [ "$DEPS_ONLY" -eq 0 ]
 then
     die "required build commands are missing and --skip-deps was requested"
 fi
+
+# --deps-only must reach the independent validator even when tools are
+# absent; only the validator can provide the complete missing dependency list.
 
 log "Configuration"
 
