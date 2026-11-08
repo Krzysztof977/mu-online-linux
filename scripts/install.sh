@@ -877,6 +877,14 @@ case "${ID:-}" in
         fi
         ;;
 
+    cachyos)
+        # CachyOS uses the experimental, now E2E-tested pacman backend.
+        DISTRO_FAMILY="portable"
+        DISTRO_VERSION="${VERSION_ID:-}"
+        [ "$MU_DISTRO_STATUS" = verified ] ||
+            echo "WARNING: CachyOS environment differs from tested rolling-release reference."
+        ;;
+
     *)
         # An unknown distro is not a fatal error by itself. The independent
         # build validator decides whether compilation prerequisites exist.
