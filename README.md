@@ -102,7 +102,7 @@ not repeated on those systems. CachyOS completed a full v0.2.0 E2E run.
 Fedora and Nobara releases other than 44, and Ubuntu releases other
 than 26.04, are not currently reference-tested.
 
-Other distribution families, including generic Arch Linux and openSUSE,
+Other distributions, including generic Arch Linux and its derivatives,
 have not passed full end-to-end validation in this project.
 
 ## Requirements
@@ -263,9 +263,9 @@ to quit. The build/toolchain, 32/64-bit ABI, graphics, network and audio
 prerequisites must pass before installation can proceed.
 
 Versions outside the tested Fedora/Nobara/Ubuntu reference set are
-also classified as unverified. Generic Arch derivatives and openSUSE
-have not passed this project's full E2E verification. The experimental
-path does not bypass GameGuard or guarantee successful gameplay.
+also classified as unverified. Generic Arch derivatives have not passed
+this project's full E2E verification. The experimental path does not
+bypass GameGuard or guarantee successful gameplay.
 
 ### Previous releases — v0.1.1 (historical)
 
