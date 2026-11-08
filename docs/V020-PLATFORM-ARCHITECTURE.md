@@ -25,6 +25,8 @@ bash tests/test-build-env.sh
 bash scripts/build-env-audit.sh
 bash tests/test-pacman-deps.sh
 bash scripts/pacman-deps-audit.sh
+bash tests/test-pacman-prepare.sh
+bash scripts/pacman-deps-prepare.sh --plan
 ```
 
 These commands do not invoke sudo, install packages, update repositories,
@@ -44,9 +46,12 @@ creates and removes temporary C/PE test binaries and produces a report. The test
 - Noninteractive mode must emit a report and exit rather than prompt.
 - [Implemented experimentally] Read-only pacman recipe audit for 40 roots,
   including `vulkan-headers`, validated for package availability on CachyOS.
-- [Pending] Controlled pacman installation after explicit approval and a
-  reviewed transaction plan. Avoid `pacman -Sy` partial upgrades and never
-  silently initiate a full system upgrade.
+- [Implemented experimentally] A separately invoked `--install` mode requires
+  a terminal, prints missing packages, asks the user to type `INSTALL`, then
+  relies on a second pacman confirmation. `--plan` is read-only and the default.
+- [Pending] Test real automated dependency installation in a fresh CachyOS VM.
+  Avoid `pacman -Sy` partial upgrades and never silently initiate a full
+  system upgrade.
 - Maintain the existing four pinned Wine patches and the Wine 11.6 build path.
 - Keep v0.1.1 tags, release archives, and main unchanged.
 
@@ -72,3 +77,19 @@ can produce false unavailability and must never cause an automatic `-Sy`.
 The script does not confer support status on other Arch derivatives.
 
 **Not implemented:** automatic transaction execution and interactive retry.
+
+## Experimental opt-in package installer
+
+`bash scripts/pacman-deps-prepare.sh --plan` performs a read-only audit.
+If every package is already installed, it runs the separate build preflight.
+`bash scripts/pacman-deps-prepare.sh --install` requires an interactive
+terminal and the exact typed consent `INSTALL` before executing a standard
+`pacman -S --needed` transaction. Pacman asks for its own confirmation.
+No upgrade, sync-only transaction, or `--noconfirm` is used. After installation,
+the module rechecks package roots and runs the independent build preflight.
+On absent/unverified backend it exits rather than guessing package names;
+interactive guided-manual retry is a later development step.
+
+The mocked transaction tests are scoped to CachyOS and intentionally do not
+exercise a real package installation. Before release, test the installer with
+missing dependencies on a disposable VM snapshot.
