@@ -52,6 +52,7 @@ DEPS_ONLY=0
 CONFIGURE_ONLY=0
 BUILD_ONLY=0
 RUNTIME_ONLY=0
+PREFIX_ONLY=0
 BUILD_JOBS_OVERRIDE=""
 
 usage()
@@ -70,6 +71,7 @@ Options:
                      No MU installer, build, runtime or prefix required.
   --build-only       Configure and compile Wine without installing runtime or MU.
   --runtime-only     Install and verify private Wine without creating prefix or MU.
+  --prefix-only      Initialize/validate pristine WoW64 prefix using installed Wine.
   --jobs N           Parallel make jobs (default: nproc).
   -h, --help         Show this help.
 
@@ -582,6 +584,12 @@ do
             shift
             ;;
 
+        --prefix-only)
+            PREFIX_ONLY=1
+            SKIP_DEPS=1
+            shift
+            ;;
+
         --jobs)
             [ "$#" -ge 2 ] || die "--jobs requires a positive integer"
             BUILD_JOBS_OVERRIDE="$2"
@@ -614,6 +622,16 @@ if [ "$RUNTIME_ONLY" -eq 1 ] &&
     die "--runtime-only cannot be combined with other --*-only modes"
 fi
 
+if [ "$PREFIX_ONLY" -eq 1 ] &&
+   { [ "$DEPS_ONLY" -eq 1 ] || [ "$CONFIGURE_ONLY" -eq 1 ] ||
+     [ "$BUILD_ONLY" -eq 1 ] || [ "$RUNTIME_ONLY" -eq 1 ]; }; then
+    die "--prefix-only cannot be combined with other --*-only modes"
+fi
+
+if [ "$PREFIX_ONLY" -eq 1 ] && [ -n "$BUILD_JOBS_OVERRIDE" ]; then
+    die "--jobs cannot be combined with --prefix-only"
+fi
+
 if [ -n "$BUILD_JOBS_OVERRIDE" ]; then
     case "$BUILD_JOBS_OVERRIDE" in
         *[!0-9]*|'') die "--jobs requires a positive integer" ;;
@@ -625,7 +643,8 @@ fi
 if [ "$DEPS_ONLY" -eq 0 ] &&
    [ "$CONFIGURE_ONLY" -eq 0 ] &&
    [ "$BUILD_ONLY" -eq 0 ] &&
-   [ "$RUNTIME_ONLY" -eq 0 ]; then
+   [ "$RUNTIME_ONLY" -eq 0 ] &&
+   [ "$PREFIX_ONLY" -eq 0 ]; then
     [ -n "$INSTALLER" ] || {
         usage
         die "official MU installer path is required"
@@ -662,6 +681,80 @@ GG_SERVICE='HKLM\System\CurrentControlSet\Services\GGKernel64'
 
 GG_IMAGE_PATH='\??\C:\Program Files (x86)\Webzen\Mu\GameGuard\GGKernel64.sys'
 
+if [ "$PREFIX_ONLY" -eq 1 ]; then
+    log "Reuse existing private Wine runtime for pristine prefix"
+
+    [ "$(uname -s)" = Linux ] || die "Linux required"
+    [ "$(uname -m)" = x86_64 ] || die "x86_64 required"
+
+    # shellcheck source=lib/platform-detect.sh
+    . "$SCRIPT_DIR/lib/platform-detect.sh"
+    # shellcheck source=lib/consent.sh
+    . "$SCRIPT_DIR/lib/consent.sh"
+    mu_detect_platform || die "platform detection failed"
+    mu_platform_report
+
+    if [ "$MU_DISTRO_STATUS" != verified ]; then
+        [ -t 0 ] && [ -t 1 ] ||
+            die "unverified distribution requires interactive confirmation"
+        read -r -p 'Type CONTINUE to initialize a prefix on this unverified distro: ' CONSENT ||
+            die "confirmation not received"
+        mu_consent_matches "$CONSENT" CONTINUE ||
+            die "experimental prefix initialization not approved"
+    fi
+
+    [ ! -e "$PREFIX" ] ||
+        die "prefix already exists; --prefix-only must never overwrite it: $PREFIX"
+
+    [ -d "$BUILD" ] && [ -f "$BUILD/Makefile" ] &&
+        [ -f "$BUILD/config.status" ] ||
+        die "previously configured Wine build missing: $BUILD"
+
+    [ -x "$RUNTIME/bin/wine" ] &&
+        [ -x "$RUNTIME/bin/wineboot" ] &&
+        [ -x "$RUNTIME/bin/wineserver" ] ||
+        die "previously installed private Wine runtime is incomplete"
+
+    [ "$("$RUNTIME/bin/wine" --version)" = "wine-$WINE_VERSION" ] ||
+        die "private Wine version mismatch"
+
+    # Recheck pinned patch files without modifying the patched source.
+    [ -d "$REPO_ROOT/patches" ] || die "patch directory missing"
+    for I in "${!PATCH_NAMES[@]}"; do
+        PATCH="$REPO_ROOT/patches/${PATCH_NAMES[$I]}"
+        [ -f "$PATCH" ] || die "missing pinned patch: $PATCH"
+        ACTUAL="$(sha256sum "$PATCH" | awk '{print $1}')"
+        [ "$ACTUAL" = "${PATCH_SHA256[$I]}" ] ||
+            die "pinned patch checksum mismatch: $PATCH"
+    done
+
+    log "Verify installed Wine artifacts are identical to build outputs"
+    PAIRS=(
+        "dlls/ntdll/ntdll.so|lib/wine/x86_64-unix/ntdll.so"
+        "dlls/ntdll/i386-windows/ntdll.dll|lib/wine/i386-windows/ntdll.dll"
+        "dlls/ntdll/x86_64-windows/ntdll.dll|lib/wine/x86_64-windows/ntdll.dll"
+        "dlls/kernelbase/i386-windows/kernelbase.dll|lib/wine/i386-windows/kernelbase.dll"
+        "dlls/kernelbase/x86_64-windows/kernelbase.dll|lib/wine/x86_64-windows/kernelbase.dll"
+        "dlls/ntoskrnl.exe/i386-windows/ntoskrnl.exe|lib/wine/i386-windows/ntoskrnl.exe"
+        "dlls/ntoskrnl.exe/x86_64-windows/ntoskrnl.exe|lib/wine/x86_64-windows/ntoskrnl.exe"
+        "dlls/winepulse.drv/winepulse.so|lib/wine/x86_64-unix/winepulse.so"
+        "dlls/winealsa.drv/winealsa.so|lib/wine/x86_64-unix/winealsa.so"
+    )
+    for PAIR in "${PAIRS[@]}"; do
+        BUILD_REL="${PAIR%%|*}"
+        RUNTIME_REL="${PAIR#*|}"
+        cmp -s -- "$BUILD/$BUILD_REL" "$RUNTIME/$RUNTIME_REL" ||
+            die "runtime/build mismatch: $RUNTIME_REL"
+        printf 'IDENTICAL %s\n' "$RUNTIME_REL"
+    done
+    printf 'V020_EXISTING_RUNTIME_VERIFIED=True\n'
+
+    [ -d "$LOG_DIR" ] ||
+        die "missing existing log directory: $LOG_DIR"
+
+    progress_begin
+    PROGRESS_DONE=5
+else
 log "Platform preflight"
 
 [ "$(uname -s)" = "Linux" ] ||
@@ -2159,6 +2252,8 @@ if [ "$RUNTIME_ONLY" -eq 1 ]; then
 fi
 
 # === MU_INSTALLER_STAGE_2E_RUNTIME_INSTALL_END ===
+fi # V020_PREFIX_ONLY_BYPASS_PREVIOUS_INSTALL_STAGES
+
 
 # === MU_INSTALLER_STAGE_3A_FRESH_PREFIX_BEGIN ===
 
@@ -2513,6 +2608,13 @@ printf 'PINNED_RUNTIME_FROM_FIRST_WINEBOOT=True\n'
 progress_stage_complete "Create Wine prefix"
 
 # === MU_INSTALLER_STAGE_3A_FRESH_PREFIX_END ===
+
+if [ "$PREFIX_ONLY" -eq 1 ]; then
+    printf '\nV020_WINE_PREFIX_ONLY_PASS=True\n'
+    printf 'PREFIX_READY=%s\n' "$PREFIX"
+    echo 'Pristine private WoW64 Wine prefix initialized; MU remains uninstalled.'
+    exit 0
+fi
 
 # === MU_INSTALLER_STAGE_3B_OFFICIAL_MU_INSTALL_BEGIN ===
 
