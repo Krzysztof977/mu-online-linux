@@ -17,7 +17,7 @@ Full end-to-end installation and game launch have been verified on:
 - Fedora 44 x86_64
 - Kubuntu 26.04.1 x86_64, based on Ubuntu 26.04
 - Nobara Linux 44 x86_64
-- CachyOS x86_64 (rolling release; v0.2.0 development branch)
+- CachyOS x86_64 (rolling release; verified for v0.2.0)
 
 The verified path includes:
 
@@ -78,12 +78,12 @@ GameGuard remains responsible for supplying and managing its own driver file.
 
 ## Supported distributions
 
-The stable **v0.1.1** release supports Fedora, Nobara Linux
-(`ID=nobara`, Fedora/DNF backend), and Ubuntu-based systems reporting
-`ID=ubuntu`. The **v0.2.0 development branch** additionally supports
-CachyOS with a native Pacman backend, a 40-root package recipe, multilib
-and compiler/ABI preflight checks. Generic Arch derivatives and Gentoo
-are **not** automatically granted CachyOS support.
+**v0.2.0** retains the tested Fedora, Nobara Linux (`ID=nobara`,
+Fedora/DNF backend), and Ubuntu (`ID=ubuntu`, APT backend) installation
+paths from v0.1.1. It adds CachyOS with a native Pacman backend, a
+40-root package recipe, multilib and compiler/ABI preflight checks.
+Generic Arch derivatives and Gentoo are **not** automatically granted
+CachyOS support.
 
 Fully tested reference systems:
 
@@ -92,15 +92,14 @@ Fully tested reference systems:
 | Fedora 44 | x86_64 | Full E2E verified |
 | Nobara Linux 44 | x86_64 | Full E2E verified |
 | Kubuntu 26.04.1 / Ubuntu 26.04 base | x86_64 | Full E2E verified |
-| CachyOS rolling release (tested on KVM/QEMU, 2026-11-08) | x86_64 | Full E2E verified on v0.2.0 development branch |
+| CachyOS rolling release (tested on KVM/QEMU, 2026-11-08) | x86_64 | Full E2E verified for v0.2.0 |
 
 Fedora and Nobara releases other than 44, and Ubuntu releases other
 than 26.04, are not currently reference-tested.
 
 Other distribution families, including generic Arch Linux and openSUSE,
 are not yet validated by this project's automatic installer. Gentoo uses
-manual dependency preparation in the v0.2.0 development branch and has
-not been E2E tested.
+manual dependency preparation in v0.2.0 and has not been E2E tested.
 
 ## Requirements
 
@@ -116,19 +115,16 @@ The MU Online installer is not included in this repository.
 
 ## Installation
 
-### CachyOS — v0.2.0 development branch (E2E tested)
+### CachyOS — v0.2.0 (E2E tested)
 
-The CachyOS support is **on the development branch**, not the v0.1.1
-tagged bootstrap. The official MU Windows installer must be downloaded
-separately. On a clean CachyOS x86_64 installation with multilib enabled:
-
-In the command examples, `User_name` is a placeholder for the GitHub
-repository owner. Replace it with the actual repository owner's username
-before running the commands.
+CachyOS support is introduced in v0.2.0; it is not included in the
+v0.1.1 release. Download the official MU Online Windows installer
+separately. On CachyOS x86_64 with multilib enabled, use the v0.2.0
+tagged source release:
 
 ~~~bash
-git clone --branch feature/cachyos-pacman-v020 \
-    https://github.com/User_name/mu-online-linux.git
+git clone --branch v0.2.0 \
+    https://github.com/Krzysztof977/mu-online-linux.git
 cd mu-online-linux
 bash scripts/install.sh --installer "/path/to/official-MU-installer.exe"
 ~~~
@@ -148,7 +144,7 @@ installation and game launch on November 8, 2026. This verification
 does not imply that other Arch-based distributions or GPU/driver
 combinations are already validated.
 
-### Other distributions — experimental v0.2.0 path
+### Other distributions — unverified v0.2.0 path
 
 **There is no hard-coded Linux distribution allowlist.** On a distribution
 that has not passed end-to-end testing, the v0.2.0 installer does not refuse
@@ -201,11 +197,9 @@ separately from Webzen and present locally.
 
 Before installing:
 
-1. For the repository checkout below, replace `User_name` in the
-   GitHub URL with the actual repository owner's username. Replace
-   `/path/to/official-MU-installer.exe` with the actual path to the official
-   MU Online installer on your computer. Keep the path in quotes, especially
-   if it contains spaces.
+1. Replace `/path/to/official-MU-installer.exe` with the actual path to
+   the official MU Online installer on your computer. Keep the path in
+   quotes, especially if it contains spaces.
 2. The full installation can take **30 minutes or more**, depending on CPU
    performance, storage speed, network speed, and package download times.
    Building Wine is the longest stage and may appear inactive for periods of
@@ -231,7 +225,7 @@ files after the installer exits.
 Advanced users may instead use a tagged source checkout:
 
 ~~~bash
-git clone https://github.com/User_name/mu-online-linux.git
+git clone https://github.com/Krzysztof977/mu-online-linux.git
 cd mu-online-linux
 git checkout v0.1.1
 
@@ -674,13 +668,15 @@ references and carry notices identifying that status.
 
 ## Release status
 
-Version 0.1.1 uses the following publication layout:
+Version 0.2.0 uses the same publication layout established by v0.1.1:
 
 - repository: `https://github.com/Krzysztof977/mu-online-linux`
-- tag: `v0.1.1`
-- release archive: `mu-online-linux-0.1.1.tar.gz`
+- tag: `v0.2.0`
+- release archive: `mu-online-linux-0.2.0.tar.gz`
 - checksum asset: `SHA256SUMS`
 - tagged bootstrap: `bootstrap.sh`
+
+The v0.1.1 tag and release assets remain available without modification.
 
 The versioned release archive contains the distributable project code,
 patches, licensing material and documentation. It does not contain
