@@ -34,7 +34,7 @@ from pathlib import Path
 import sys
 
 t = Path(sys.argv[1]).read_text()
-entry = t.index('if [ "$PREFIX_ONLY" -eq 1 ]; then\n    log "Reuse existing private Wine runtime')
+entry = t.index('if [ "$PREFIX_ONLY" -eq 1 ] || [ "$RESUME_FROM_PREFIX" -eq 1 ]; then')
 preflight = t.index('log "Platform preflight"')
 skip_end = t.index('fi # V020_PREFIX_ONLY_BYPASS_PREVIOUS_INSTALL_STAGES')
 wineboot = t.index('# === MU_INSTALLER_STAGE_3A_FRESH_PREFIX_BEGIN ===')
@@ -43,6 +43,7 @@ mu = t.index('# === MU_INSTALLER_STAGE_3B_OFFICIAL_MU_INSTALL_BEGIN ===')
 assert entry < preflight < skip_end < wineboot < cutoff < mu
 assert 'exit 0' in t[cutoff:mu]
 assert 'V020_WINE_PREFIX_ONLY_PASS=True' in t[cutoff:mu]
+assert 'log "Reuse existing private Wine runtime for pristine prefix"' in t[entry:preflight]
 assert 'V020_EXISTING_RUNTIME_VERIFIED=True' in t[entry:preflight]
 assert '[ ! -e "$PREFIX" ]' in t[entry:preflight]
 assert 'cmp -s -- "$BUILD/$BUILD_REL" "$RUNTIME/$RUNTIME_REL"' in t[entry:preflight]
