@@ -48,6 +48,7 @@ DEFAULT_BASE="$HOME/.local/share/mu-online-linux"
 BASE="$DEFAULT_BASE"
 INSTALLER=""
 SKIP_DEPS=0
+DEPS_ONLY=0
 
 usage()
 {
@@ -60,6 +61,7 @@ Options:
   --base PATH        Installation workspace.
                      Default: $DEFAULT_BASE
   --skip-deps        Do not run system dependency installation.
+  --deps-only        Read-only dependency validation; no MU installer needed.
   -h, --help         Show this help.
 
 The script installs a private Wine runtime and a separate Wine prefix.
@@ -547,6 +549,12 @@ do
             shift
             ;;
 
+        --deps-only)
+            DEPS_ONLY=1
+            SKIP_DEPS=1
+            shift
+            ;;
+
         -h|--help)
             usage
             exit 0
@@ -558,17 +566,21 @@ do
     esac
 done
 
-[ -n "$INSTALLER" ] || {
-    usage
-    die "official MU installer path is required"
-}
+if [ "$DEPS_ONLY" -eq 0 ]; then
+    [ -n "$INSTALLER" ] || {
+        usage
+        die "official MU installer path is required"
+    }
 
-INSTALLER="$(
-    readlink -f -- "$INSTALLER"
-)" || die "cannot resolve installer path"
+    INSTALLER="$(
+        readlink -f -- "$INSTALLER"
+    )" || die "cannot resolve installer path"
 
-[ -f "$INSTALLER" ] ||
-    die "installer does not exist: $INSTALLER"
+    [ -f "$INSTALLER" ] ||
+        die "installer does not exist: $INSTALLER"
+else
+    INSTALLER="(not required for --deps-only)"
+fi
 
 SOURCE_CACHE="$BASE/cache"
 WORK="$BASE/work"
@@ -608,6 +620,13 @@ log "Platform preflight"
 printf 'Distribution: %s\n' "${PRETTY_NAME:-unknown}"
 printf 'Architecture: %s\n' "$(uname -m)"
 
+# v0.2.0: independent platform, package manager and build validation.
+# The legacy recipes for Fedora/Nobara and Ubuntu remain unchanged.
+# shellcheck source=lib/platform-detect.sh
+. "$SCRIPT_DIR/lib/platform-detect.sh"
+mu_detect_platform || die "platform detection failed"
+mu_platform_report
+
 case "${ID:-}" in
     fedora)
         DISTRO_FAMILY="fedora"
@@ -639,9 +658,27 @@ case "${ID:-}" in
         ;;
 
     *)
-        die "supported distributions are currently Fedora and Ubuntu"
+        # An unknown distro is not a fatal error by itself. The independent
+        # build validator decides whether compilation prerequisites exist.
+        DISTRO_FAMILY="portable"
+        DISTRO_VERSION="${VERSION_ID:-}"
+        echo "WARNING: unverified distribution; dependency setup will be selected separately."
         ;;
 esac
+
+# Explicit consent before any package or Wine operation on unverified OS.
+# Read-only --deps-only deliberately needs no confirmation.
+if [ "$DEPS_ONLY" -eq 0 ] &&
+   [ "$MU_DISTRO_STATUS" != verified ]; then
+    if [ ! -t 0 ] || [ ! -t 1 ]; then
+        die "unverified distribution requires interactive confirmation"
+    fi
+    printf '\nUnverified distribution: %s\n' "${PRETTY_NAME:-unknown}"
+    printf '%s\n' "MU Online compatibility and GameGuard have not been validated here."
+    read -r -p 'Type CONTINUE to proceed with experimental installation: ' CONSENT ||
+        die "confirmation not received"
+    [ "$CONSENT" = CONTINUE ] || die "experimental installation not approved"
+fi
 
 log "Repository validation"
 
@@ -920,6 +957,19 @@ if [ "$SKIP_DEPS" -eq 0 ]; then
                 "${UBUNTU_PACKAGES[@]}"
             ;;
 
+        portable)
+            # Verified backend/recipe is required for automatic package names.
+            # Unknown systems use a guided manual retry instead.
+            if [ "$MU_DISTRO_ID" = cachyos ] &&
+               [ "$MU_PKG_BACKEND" = pacman ]; then
+                bash "$SCRIPT_DIR/pacman-deps-prepare.sh" --install ||
+                    die "experimental CachyOS pacman dependency setup failed"
+            else
+                bash "$SCRIPT_DIR/manual-deps-prepare.sh" --interactive ||
+                    die "manual dependency preparation did not complete"
+            fi
+            ;;
+
         *)
             die "internal error: unknown dependency backend"
             ;;
@@ -1011,6 +1061,12 @@ case "$DISTRO_FAMILY" in
             /usr/lib/i386-linux-gnu/pkgconfig/alsa.pc
         )
         ;;
+
+    portable)
+        # No hardcoded library paths for unverified distributions.
+        # The common validator below compiles and links the 32-bit ABI.
+        AUDIO_PC_FILES=()
+        ;;
 esac
 
 for PC_FILE in "${AUDIO_PC_FILES[@]}"; do
@@ -1018,6 +1074,12 @@ for PC_FILE in "${AUDIO_PC_FILES[@]}"; do
         die "required audio development file missing: $PC_FILE"
     printf 'OK      %s\n' "$PC_FILE"
 done
+
+# Mandatory for --skip-deps too: skip installation, never skip validation.
+log "Independent build/link/ABI validation"
+bash "$SCRIPT_DIR/build-env-audit.sh" ||
+    die "independent build environment audit failed"
+printf 'V020_BUILD_ENV_AUDIT_PASS=True\n'
 
 printf '\nINSTALLER_STAGE_2A_DISTRO_DEPS_PASS=True\n'
 
@@ -1032,6 +1094,12 @@ case "$DISTRO_FAMILY" in
 esac
 
 progress_stage_complete "System dependencies"
+
+if [ "$DEPS_ONLY" -eq 1 ]; then
+    printf '\nV020_INSTALLER_DEPENDENCIES_ONLY_PASS=True\n'
+    echo 'No Wine download, compilation, prefix or game installation was started.'
+    exit 0
+fi
 
 # === MU_INSTALLER_STAGE_2A_DISTRO_DEPS_END ===
 
