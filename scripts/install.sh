@@ -49,6 +49,7 @@ BASE="$DEFAULT_BASE"
 INSTALLER=""
 SKIP_DEPS=0
 DEPS_ONLY=0
+CONFIGURE_ONLY=0
 
 usage()
 {
@@ -62,6 +63,8 @@ Options:
                      Default: $DEFAULT_BASE
   --skip-deps        Do not run system dependency installation.
   --deps-only        Read-only dependency validation; no MU installer needed.
+  --configure-only   Verify/patch Wine source and run configure only.
+                     No MU installer, build, runtime or prefix required.
   -h, --help         Show this help.
 
 The script installs a private Wine runtime and a separate Wine prefix.
@@ -555,6 +558,12 @@ do
             shift
             ;;
 
+        --configure-only)
+            CONFIGURE_ONLY=1
+            SKIP_DEPS=1
+            shift
+            ;;
+
         -h|--help)
             usage
             exit 0
@@ -566,7 +575,11 @@ do
     esac
 done
 
-if [ "$DEPS_ONLY" -eq 0 ]; then
+if [ "$DEPS_ONLY" -eq 1 ] && [ "$CONFIGURE_ONLY" -eq 1 ]; then
+    die "--deps-only and --configure-only cannot be combined"
+fi
+
+if [ "$DEPS_ONLY" -eq 0 ] && [ "$CONFIGURE_ONLY" -eq 0 ]; then
     [ -n "$INSTALLER" ] || {
         usage
         die "official MU installer path is required"
@@ -579,7 +592,7 @@ if [ "$DEPS_ONLY" -eq 0 ]; then
     [ -f "$INSTALLER" ] ||
         die "installer does not exist: $INSTALLER"
 else
-    INSTALLER="(not required for --deps-only)"
+    INSTALLER="(not required for preliminary validation)"
 fi
 
 SOURCE_CACHE="$BASE/cache"
@@ -1625,6 +1638,15 @@ printf 'RUNTIME_CREATED_DURING_CONFIGURE=False\n'
 printf '\nINSTALLER_STAGE_2C_CONFIGURE_PASS=True\n'
 
 progress_stage_complete "Configure Wine 11.6"
+
+if [ "$CONFIGURE_ONLY" -eq 1 ]; then
+    printf '\nV020_WINE_CONFIGURE_ONLY_PASS=True\n'
+    printf 'SOURCE_REUSABLE=%s\n' "$SOURCE"
+    printf 'BUILD_REUSABLE=%s\n' "$BUILD"
+    echo 'Wine was configured, but no compilation, runtime installation,'
+    echo 'Wine prefix creation or MU Online installation was started.'
+    exit 0
+fi
 
 # === MU_INSTALLER_STAGE_2C_CONFIGURE_END ===
 
