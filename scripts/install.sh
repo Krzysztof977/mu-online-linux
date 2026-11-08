@@ -878,7 +878,7 @@ case "${ID:-}" in
         ;;
 
     cachyos)
-        # CachyOS uses the experimental, now E2E-tested pacman backend.
+        # CachyOS uses the E2E-tested native Pacman dependency recipe.
         DISTRO_FAMILY="portable"
         DISTRO_VERSION="${VERSION_ID:-}"
         [ "$MU_DISTRO_STATUS" = verified ] ||
@@ -1190,12 +1190,12 @@ if [ "$SKIP_DEPS" -eq 0 ]; then
             ;;
 
         portable)
-            # Verified backend/recipe is required for automatic package names.
-            # Unknown systems use a guided manual retry instead.
-            if [ "$MU_DISTRO_ID" = cachyos ] &&
-               [ "$MU_PKG_BACKEND" = pacman ]; then
+            # A detected package manager is not automatically a tested recipe.
+            # Unverified distributions receive a single CONTINUE prompt above.
+            if [ "$MU_PKG_BACKEND" = pacman ] &&
+               [ "$MU_PKG_RECIPE" = cachyos-v020 ]; then
                 bash "$SCRIPT_DIR/pacman-deps-prepare.sh" --install ||
-                    die "experimental CachyOS pacman dependency setup failed"
+                    die "CachyOS pacman dependency setup failed"
             else
                 bash "$SCRIPT_DIR/manual-deps-prepare.sh" --interactive ||
                     die "manual dependency preparation did not complete"
