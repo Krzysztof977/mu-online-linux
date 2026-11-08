@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Experimental MU Online Linux v0.2.0 dependency dispatcher.
+# MU Online Linux v0.2.0 dependency dispatcher.
 # Does NOT invoke the legacy installer, download Wine or install MU.
 set -euo pipefail
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
@@ -25,8 +25,8 @@ if [[ "$MU_HOST_ARCH" != x86_64 ]]; then
 fi
 
 # A candidate backend is NOT a validated package recipe.
-# Only CachyOS has been audited against our experimental pacman roots.
-if [[ "$MU_DISTRO_ID" == cachyos && "$MU_PKG_BACKEND" == pacman ]]; then
+# Only CachyOS has a validated automatic Pacman package recipe.
+if [[ "$MU_PKG_BACKEND" == pacman && "$MU_PKG_RECIPE" == cachyos-v020 ]]; then
     echo 'V020_DEPENDENCY_ROUTE=cachyos-pacman'
     if [[ "$mode" == --prepare ]]; then
         exec bash "$SCRIPT_DIR/pacman-deps-prepare.sh" --install
