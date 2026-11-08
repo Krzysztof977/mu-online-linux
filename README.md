@@ -122,9 +122,13 @@ The CachyOS support is **on the development branch**, not the v0.1.1
 tagged bootstrap. The official MU Windows installer must be downloaded
 separately. On a clean CachyOS x86_64 installation with multilib enabled:
 
+In the command examples, `User_name` is a placeholder for the GitHub
+repository owner. Replace it with the actual repository owner's username
+before running the commands.
+
 ~~~bash
 git clone --branch feature/cachyos-pacman-v020 \
-    https://github.com/Krzysztof977/mu-online-linux.git
+    https://github.com/User_name/mu-online-linux.git
 cd mu-online-linux
 bash scripts/install.sh --installer "/path/to/official-MU-installer.exe"
 ~~~
@@ -186,7 +190,8 @@ separately from Webzen and present locally.
 
 Before running the command below:
 
-1. The command is an example. Replace
+1. The command is an example. Replace `User_name` in GitHub URLs with
+   the actual repository owner's username. Replace
    `/path/to/official-MU-installer.exe` with the actual path to the official
    MU Online installer on your computer. Keep the path in quotes, especially
    if it contains spaces.
@@ -209,7 +214,7 @@ Before running the command below:
 Example:
 
 ~~~bash
-curl -fsSL https://raw.githubusercontent.com/Krzysztof977/mu-online-linux/v0.1.1/bootstrap.sh | bash -s -- --installer "/path/to/official-MU-installer.exe"
+curl -fsSL https://raw.githubusercontent.com/User_name/mu-online-linux/v0.1.1/bootstrap.sh | bash -s -- --installer "/path/to/official-MU-installer.exe"
 ~~~
 
 The bootstrap downloads the matching versioned release archive, verifies its
@@ -220,7 +225,7 @@ files after the installer exits.
 Advanced users may instead use a tagged source checkout:
 
 ~~~bash
-git clone https://github.com/Krzysztof977/mu-online-linux.git
+git clone https://github.com/User_name/mu-online-linux.git
 cd mu-online-linux
 git checkout v0.1.1
 
