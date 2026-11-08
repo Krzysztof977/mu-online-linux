@@ -53,6 +53,7 @@ CONFIGURE_ONLY=0
 BUILD_ONLY=0
 RUNTIME_ONLY=0
 PREFIX_ONLY=0
+RESUME_FROM_PREFIX=0
 BUILD_JOBS_OVERRIDE=""
 
 usage()
@@ -72,6 +73,8 @@ Options:
   --build-only       Configure and compile Wine without installing runtime or MU.
   --runtime-only     Install and verify private Wine without creating prefix or MU.
   --prefix-only      Initialize/validate pristine WoW64 prefix using installed Wine.
+  --resume-from-prefix
+                     Reuse verified Wine and prefix, install official MU.
   --jobs N           Parallel make jobs (default: nproc).
   -h, --help         Show this help.
 
@@ -590,6 +593,12 @@ do
             shift
             ;;
 
+        --resume-from-prefix)
+            RESUME_FROM_PREFIX=1
+            SKIP_DEPS=1
+            shift
+            ;;
+
         --jobs)
             [ "$#" -ge 2 ] || die "--jobs requires a positive integer"
             BUILD_JOBS_OVERRIDE="$2"
@@ -628,8 +637,16 @@ if [ "$PREFIX_ONLY" -eq 1 ] &&
     die "--prefix-only cannot be combined with other --*-only modes"
 fi
 
-if [ "$PREFIX_ONLY" -eq 1 ] && [ -n "$BUILD_JOBS_OVERRIDE" ]; then
-    die "--jobs cannot be combined with --prefix-only"
+if [ "$RESUME_FROM_PREFIX" -eq 1 ] &&
+   { [ "$DEPS_ONLY" -eq 1 ] || [ "$CONFIGURE_ONLY" -eq 1 ] ||
+     [ "$BUILD_ONLY" -eq 1 ] || [ "$RUNTIME_ONLY" -eq 1 ] ||
+     [ "$PREFIX_ONLY" -eq 1 ]; }; then
+    die "--resume-from-prefix cannot be combined with other --*-only modes"
+fi
+
+if { [ "$PREFIX_ONLY" -eq 1 ] || [ "$RESUME_FROM_PREFIX" -eq 1 ]; } &&
+   [ -n "$BUILD_JOBS_OVERRIDE" ]; then
+    die "--jobs is not supported for --prefix-only or --resume-from-prefix"
 fi
 
 if [ -n "$BUILD_JOBS_OVERRIDE" ]; then
@@ -681,8 +698,12 @@ GG_SERVICE='HKLM\System\CurrentControlSet\Services\GGKernel64'
 
 GG_IMAGE_PATH='\??\C:\Program Files (x86)\Webzen\Mu\GameGuard\GGKernel64.sys'
 
-if [ "$PREFIX_ONLY" -eq 1 ]; then
-    log "Reuse existing private Wine runtime for pristine prefix"
+if [ "$PREFIX_ONLY" -eq 1 ] || [ "$RESUME_FROM_PREFIX" -eq 1 ]; then
+    if [ "$RESUME_FROM_PREFIX" -eq 1 ]; then
+        log "Resume from validated private Wine runtime and pristine prefix"
+    else
+        log "Reuse existing private Wine runtime for pristine prefix"
+    fi
 
     [ "$(uname -s)" = Linux ] || die "Linux required"
     [ "$(uname -m)" = x86_64 ] || die "x86_64 required"
@@ -697,14 +718,55 @@ if [ "$PREFIX_ONLY" -eq 1 ]; then
     if [ "$MU_DISTRO_STATUS" != verified ]; then
         [ -t 0 ] && [ -t 1 ] ||
             die "unverified distribution requires interactive confirmation"
-        read -r -p 'Type CONTINUE to initialize a prefix on this unverified distro: ' CONSENT ||
-            die "confirmation not received"
+        if [ "$RESUME_FROM_PREFIX" -eq 1 ]; then
+            printf 'WARNING: this command runs the supplied MU installer and completes setup.\n'
+            read -r -p 'Type CONTINUE to install MU on this unverified distro: ' CONSENT ||
+                die "confirmation not received"
+        else
+            read -r -p 'Type CONTINUE to initialize a prefix on this unverified distro: ' CONSENT ||
+                die "confirmation not received"
+        fi
         mu_consent_matches "$CONSENT" CONTINUE ||
             die "experimental prefix initialization not approved"
     fi
 
-    [ ! -e "$PREFIX" ] ||
-        die "prefix already exists; --prefix-only must never overwrite it: $PREFIX"
+    if [ "$PREFIX_ONLY" -eq 1 ]; then
+        [ ! -e "$PREFIX" ] ||
+            die "prefix already exists; --prefix-only must never overwrite it: $PREFIX"
+    else
+        [ -d "$PREFIX" ] ||
+            die "existing prefix missing; --resume-from-prefix cannot initialize it"
+        for REG in system.reg user.reg userdef.reg; do
+            [ -f "$PREFIX/$REG" ] ||
+                die "existing prefix registry file missing: $REG"
+        done
+
+        [ -f "$PREFIX/drive_c/windows/system32/notepad.exe" ] ||
+            die "existing prefix has no x86_64 system32 notepad.exe"
+        [ -f "$PREFIX/drive_c/windows/syswow64/notepad.exe" ] ||
+            die "existing prefix has no i386 syswow64 notepad.exe"
+
+        SYSTEM32_DESC="$(file -b "$PREFIX/drive_c/windows/system32/notepad.exe")"
+        SYSWOW64_DESC="$(file -b "$PREFIX/drive_c/windows/syswow64/notepad.exe")"
+        case "$SYSTEM32_DESC" in
+            *PE32+*x86-64*) ;;
+            *) die "existing prefix system32 architecture mismatch" ;;
+        esac
+        case "$SYSWOW64_DESC" in
+            *PE32*Intel*i386*) ;;
+            *) die "existing prefix syswow64 architecture mismatch" ;;
+        esac
+
+        [ ! -e "$MU_DIR" ] ||
+            die "MU is already present; refusing to repeat official installation"
+        if grep -Fiq 'GGKernel64' "$PREFIX/system.reg"; then
+            die "existing prefix is not pristine: GGKernel64 registry entry present"
+        fi
+        GG_FOUND="$(find "$PREFIX/drive_c" -type f -iname GGKernel64.sys -print -quit)"
+        [ -z "$GG_FOUND" ] ||
+            die "existing prefix is not pristine: GameGuard driver present"
+        printf 'V020_EXISTING_PREFIX_PRISTINE=True\n'
+    fi
 
     [ -d "$BUILD" ] && [ -f "$BUILD/Makefile" ] &&
         [ -f "$BUILD/config.status" ] ||
@@ -753,7 +815,11 @@ if [ "$PREFIX_ONLY" -eq 1 ]; then
         die "missing existing log directory: $LOG_DIR"
 
     progress_begin
-    PROGRESS_DONE=5
+    if [ "$RESUME_FROM_PREFIX" -eq 1 ]; then
+        PROGRESS_DONE=6
+    else
+        PROGRESS_DONE=5
+    fi
 else
 log "Platform preflight"
 
@@ -2255,6 +2321,8 @@ fi
 fi # V020_PREFIX_ONLY_BYPASS_PREVIOUS_INSTALL_STAGES
 
 
+if [ "$RESUME_FROM_PREFIX" -eq 0 ]; then
+
 # === MU_INSTALLER_STAGE_3A_FRESH_PREFIX_BEGIN ===
 
 progress_stage_start "Create Wine prefix"
@@ -2615,6 +2683,8 @@ if [ "$PREFIX_ONLY" -eq 1 ]; then
     echo 'Pristine private WoW64 Wine prefix initialized; MU remains uninstalled.'
     exit 0
 fi
+
+fi # V020_SKIP_PREFIX_INITIALIZATION_WHEN_RESUMING
 
 # === MU_INSTALLER_STAGE_3B_OFFICIAL_MU_INSTALL_BEGIN ===
 
