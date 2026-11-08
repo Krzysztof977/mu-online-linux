@@ -82,7 +82,7 @@ GameGuard remains responsible for supplying and managing its own driver file.
 Fedora/DNF backend), and Ubuntu (`ID=ubuntu`, APT backend) installation
 paths from v0.1.1. It adds CachyOS with a native Pacman backend, a
 40-root package recipe, multilib and compiler/ABI preflight checks.
-Generic Arch derivatives and Gentoo are **not** automatically granted
+Generic Arch derivatives are **not** automatically granted
 CachyOS support.
 
 Fully tested reference systems:
@@ -103,8 +103,7 @@ Fedora and Nobara releases other than 44, and Ubuntu releases other
 than 26.04, are not currently reference-tested.
 
 Other distribution families, including generic Arch Linux and openSUSE,
-are not yet validated by this project's automatic installer. Gentoo uses
-manual dependency preparation in v0.2.0 and has not been E2E tested.
+have not passed full end-to-end validation in this project.
 
 ## Requirements
 
@@ -264,10 +263,9 @@ to quit. The build/toolchain, 32/64-bit ABI, graphics, network and audio
 prerequisites must pass before installation can proceed.
 
 Versions outside the tested Fedora/Nobara/Ubuntu reference set are
-also classified as unverified. Gentoo, generic Arch derivatives and
-openSUSE have not passed this project's full E2E verification. The
-experimental path does not bypass GameGuard or guarantee successful
-gameplay.
+also classified as unverified. Generic Arch derivatives and openSUSE
+have not passed this project's full E2E verification. The experimental
+path does not bypass GameGuard or guarantee successful gameplay.
 
 ### Previous releases — v0.1.1 (historical)
 
