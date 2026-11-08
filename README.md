@@ -143,6 +143,41 @@ installation and game launch on November 8, 2026. This verification
 does not imply that other Arch-based distributions or GPU/driver
 combinations are already validated.
 
+### Other distributions — experimental v0.2.0 path
+
+**There is no hard-coded Linux distribution allowlist.** On a distribution
+that has not passed end-to-end testing, the v0.2.0 installer does not refuse
+installation merely because the OS name is unfamiliar. It identifies the
+platform and available package manager, marks the OS as **unverified**, and
+requires an explicit interactive confirmation before continuing.
+
+Run the development installer normally with your own official MU Online
+Windows installer:
+
+~~~bash
+bash scripts/install.sh --installer "/path/to/official-MU-installer.exe"
+~~~
+
+When prompted on an unverified system:
+
+~~~text
+Type CONTINUE to proceed with experimental installation:
+~~~
+
+Type **`continue`** and press Enter. `CONTINUE` and other letter-case
+variants are accepted; an empty answer, spaces added around the word, or a
+different answer is rejected. This is an **opt-in to testing**, not a claim
+that your distribution is already supported.
+
+**Important limitations:** Linux and x86_64 are still required. The
+installer must also pass its checks for required build commands, compiler
+and linker output, 32/64-bit ABI, graphics, networking and audio libraries.
+Unknown or unsupported package-manager recipes use guided **manual
+dependency preparation** rather than guessing package names; missing
+dependencies or failed checks stop installation. The consent prompt
+requires an interactive terminal. The installer does not bypass GameGuard
+or guarantee that MU Online works on an untested distribution.
+
 ### Stable v0.1.1 — Fedora, Nobara, and Ubuntu
 
 For version 0.1.1, the recommended entry point is the tagged bootstrap
