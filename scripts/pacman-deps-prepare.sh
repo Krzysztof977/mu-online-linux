@@ -1,12 +1,11 @@
 #!/usr/bin/env bash
-# Experimental pacman dependency preparation for MU Online Linux v0.2.0.
-# --plan is read-only (default); --install requires explicit terminal consent.
+# Pacman dependency preparation for the verified CachyOS recipe.
+# --plan is read-only; --install requires a TTY and Pacman's confirmation.
+# Distribution consent, when required, is handled by the calling installer.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 . "$SCRIPT_DIR/lib/platform-detect.sh"
-# shellcheck source=lib/consent.sh
-. "$SCRIPT_DIR/lib/consent.sh"
 . "$SCRIPT_DIR/lib/pacman-deps.sh"
 
 mode="${1:---plan}"
@@ -29,9 +28,13 @@ if [[ "$MU_HOST_ARCH" != x86_64 ]]; then
     exit 2
 fi
 if [[ "$MU_PKG_BACKEND" != pacman ]]; then
-    printf 'ERROR: no validated native pacman backend. Manual dependency setup is required.\n' >&2
-    printf 'NEXT: install the missing build requirements with your native package manager.\n' >&2
-    printf 'NEXT: run bash scripts/build-env-audit.sh to recheck without --skip-deps.\n' >&2
+    printf 'ERROR: no native pacman backend detected. Use manual dependency setup.\n' >&2
+    exit 2
+fi
+# Detecting pacman alone does not authorize the CachyOS package recipe.
+if [[ "$mode" == --install && "$MU_PKG_RECIPE" != cachyos-v020 ]]; then
+    printf 'ERROR: automatic pacman package recipe is validated only on CachyOS.\n' >&2
+    printf 'NEXT: use assisted manual dependency preparation for this distribution.\n' >&2
     exit 2
 fi
 if ! pacman-conf --repo-list | grep -Fxq multilib; then
@@ -79,21 +82,8 @@ if [[ ! -t 0 || ! -t 1 ]]; then
 fi
 
 echo
-echo '=== CONFIRM EXPERIMENTAL PACKAGE TRANSACTION ==='
-if [[ "$MU_DISTRO_STATUS" != verified ]]; then
-    echo 'WARNING: this distribution has not passed MU Online end-to-end testing.'
-fi
-if [[ "$MU_DISTRO_ID" != cachyos ]]; then
-    echo 'WARNING: this package recipe has been validated only on CachyOS.'
-    echo 'Confirm package compatibility before using it on an Arch derivative.'
-fi
-echo 'Only missing package roots from the fixed recipe will be requested.'
-echo 'Pacman will show its transaction and ask for separate confirmation.'
-read -r -p 'Type INSTALL to allow a pacman dependency transaction: ' consent
-if ! mu_consent_matches "$consent" INSTALL; then
-    echo 'INSTALL_CANCELLED=True'
-    exit 3
-fi
+echo 'Only missing package roots from the validated CachyOS recipe will be requested.'
+echo 'Pacman will show its own transaction and ask for confirmation.'
 
 echo
 echo '=== INSTALL MISSING DEPENDENCIES ==='
