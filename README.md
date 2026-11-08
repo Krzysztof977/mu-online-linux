@@ -17,6 +17,7 @@ Full end-to-end installation and game launch have been verified on:
 - Fedora 44 x86_64
 - Kubuntu 26.04.1 x86_64, based on Ubuntu 26.04
 - Nobara Linux 44 x86_64
+- CachyOS x86_64 (rolling release; v0.2.0 development branch)
 
 The verified path includes:
 
@@ -77,11 +78,12 @@ GameGuard remains responsible for supplying and managing its own driver file.
 
 ## Supported distributions
 
-The installer currently supports:
-
-- Fedora
-- Nobara Linux (`ID=nobara`, Fedora/DNF backend)
-- Ubuntu and Ubuntu-based systems reporting `ID=ubuntu`
+The stable **v0.1.1** release supports Fedora, Nobara Linux
+(`ID=nobara`, Fedora/DNF backend), and Ubuntu-based systems reporting
+`ID=ubuntu`. The **v0.2.0 development branch** additionally supports
+CachyOS with a native Pacman backend, a 40-root package recipe, multilib
+and compiler/ABI preflight checks. Generic Arch derivatives and Gentoo
+are **not** automatically granted CachyOS support.
 
 Fully tested reference systems:
 
@@ -90,12 +92,15 @@ Fully tested reference systems:
 | Fedora 44 | x86_64 | Full E2E verified |
 | Nobara Linux 44 | x86_64 | Full E2E verified |
 | Kubuntu 26.04.1 / Ubuntu 26.04 base | x86_64 | Full E2E verified |
+| CachyOS rolling release (tested on KVM/QEMU, 2026-11-08) | x86_64 | Full E2E verified on v0.2.0 development branch |
 
 Fedora and Nobara releases other than 44, and Ubuntu releases other
 than 26.04, are not currently reference-tested.
 
-Other distribution families such as Arch Linux and openSUSE are not yet
-supported by the installer.
+Other distribution families, including generic Arch Linux and openSUSE,
+are not yet validated by this project's automatic installer. Gentoo uses
+manual dependency preparation in the v0.2.0 development branch and has
+not been E2E tested.
 
 ## Requirements
 
@@ -110,6 +115,35 @@ You need:
 The MU Online installer is not included in this repository.
 
 ## Installation
+
+### CachyOS — v0.2.0 development branch (E2E tested)
+
+The CachyOS support is **on the development branch**, not the v0.1.1
+tagged bootstrap. The official MU Windows installer must be downloaded
+separately. On a clean CachyOS x86_64 installation with multilib enabled:
+
+~~~bash
+git clone --branch feature/cachyos-pacman-v020 \
+    https://github.com/Krzysztof977/mu-online-linux.git
+cd mu-online-linux
+bash scripts/install.sh --installer "/path/to/official-MU-installer.exe"
+~~~
+
+The installer identifies CachyOS, checks the native Pacman backend and
+required development environment, and offers to install missing package
+roots through an explicitly confirmed `pacman -S --needed` transaction.
+It does **not** run `pacman -Sy` or silently upgrade the system.
+It then builds patched Wine 11.6, creates a private WoW64 prefix, runs
+the official MU installer, and configures the launcher. On a VM with
+limited RAM, add `--jobs 2` to limit parallel compilation.
+
+The reported end-to-end CachyOS test used KVM/QEMU, six virtual Ryzen
+cores, approximately 5.78 GiB RAM, and completed a clean end-user
+installation and game launch on November 8, 2026. This verification
+does not imply that other Arch-based distributions or GPU/driver
+combinations are already validated.
+
+### Stable v0.1.1 — Fedora, Nobara, and Ubuntu
 
 For version 0.1.1, the recommended entry point is the tagged bootstrap
 script. The official MU Online Windows installer must already be downloaded
