@@ -1,13 +1,11 @@
 #!/usr/bin/env bash
-# MU Online Linux v0.2.0 experimental assisted-manual dependency preparation.
+# MU Online Linux v0.2.0 assisted-manual dependency preparation.
 # This tool never installs packages or modifies the host.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=lib/platform-detect.sh
 . "$SCRIPT_DIR/lib/platform-detect.sh"
-# shellcheck source=lib/consent.sh
-. "$SCRIPT_DIR/lib/consent.sh"
 
 mode="${1:---check}"
 if (( $# > 1 )); then
@@ -48,16 +46,10 @@ if [[ "$mode" == --interactive && ( ! -t 0 || ! -t 1 ) ]]; then
     exit 3
 fi
 
-if [[ "$mode" == --interactive && "$MU_DISTRO_STATUS" != verified ]]; then
-    echo
-    echo 'WARNING: this distribution has not passed MU Online end-to-end validation.'
-    echo 'The following checks only validate build prerequisites; they do not'
-    echo 'prove that Wine and the game will work on this distribution.'
-    read -r -p 'Type CONTINUE to enter assisted-manual setup: ' consent || exit 3
-    if ! mu_consent_matches "$consent" CONTINUE; then
-        echo 'MANUAL_SETUP_CANCELLED=True'
-        exit 3
-    fi
+# The parent installer requests CONTINUE once on unverified distributions.
+# This helper performs no package transactions, so no second consent is needed.
+if [[ "$MU_DISTRO_STATUS" != verified ]]; then
+    echo 'NOTICE: build prerequisites alone do not verify MU/GameGuard compatibility.'
 fi
 
 attempt=0
@@ -87,9 +79,9 @@ while :; do
     fi
 
     echo
-    echo '[R] Recheck build dependencies'
+    echo '[ENTER] Recheck build dependencies'
     echo '[Q] Quit without installing anything'
-    read -r -p 'Choice [R/Q]: ' choice || exit 3
+    read -r -p 'Press ENTER to recheck, or Q to quit: ' choice || exit 3
     case "$choice" in
         [Rr]|'') ;;
         [Qq])
