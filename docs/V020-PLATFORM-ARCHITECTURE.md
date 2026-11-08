@@ -23,6 +23,8 @@ bash scripts/platform-audit.sh
 bash tests/test-platform-detect.sh
 bash tests/test-build-env.sh
 bash scripts/build-env-audit.sh
+bash tests/test-pacman-deps.sh
+bash scripts/pacman-deps-audit.sh
 ```
 
 These commands do not invoke sudo, install packages, update repositories,
@@ -40,9 +42,11 @@ creates and removes temporary C/PE test binaries and produces a report. The test
   before treating a successful audit as a sufficient Wine build gate.
 - Add a controlled manual retry loop for unknown/unsupported backends.
 - Noninteractive mode must emit a report and exit rather than prompt.
-- Add a pacman package recipe validated inside CachyOS. The first dependency
-  transaction must require explicit approval and avoid `pacman -Sy` partial
-  upgrades. Never silently initiate a full system upgrade.
+- [Implemented experimentally] Read-only pacman recipe audit for 40 roots,
+  including `vulkan-headers`, validated for package availability on CachyOS.
+- [Pending] Controlled pacman installation after explicit approval and a
+  reviewed transaction plan. Avoid `pacman -Sy` partial upgrades and never
+  silently initiate a full system upgrade.
 - Maintain the existing four pinned Wine patches and the Wine 11.6 build path.
 - Keep v0.1.1 tags, release archives, and main unchanged.
 
@@ -56,3 +60,15 @@ means only that all current *experimental* probes passed; it is not a claim
 that Wine `./configure` or `make` will succeed. The check prints
 `MISSING` entries for individual failed probes and exits non-zero if any fail.
 No interactive retry flow is implemented at this phase.
+
+## CachyOS pacman recipe (read-only)
+
+`bash scripts/pacman-deps-audit.sh` validates platform/backend/multilib,
+then classifies 40 package roots as installed, available, or not found.
+It uses only `pacman -Qq`, `pacman -Si`, and `pacman-conf --repo-list`;
+there is no `sudo`, synchronization, package transaction, or Wine build.
+Because `pacman -Si` reads the local sync database, a stale sync database
+can produce false unavailability and must never cause an automatic `-Sy`.
+The script does not confer support status on other Arch derivatives.
+
+**Not implemented:** automatic transaction execution and interactive retry.
