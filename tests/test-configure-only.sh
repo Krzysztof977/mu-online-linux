@@ -33,7 +33,7 @@ from pathlib import Path
 import sys
 
 text = Path(sys.argv[1]).read_text()
-checkpoint = text.index('if [ "$CONFIGURE_ONLY" -eq 1 ]; then\\n    printf')
+checkpoint = text.index('if [ "$CONFIGURE_ONLY" -eq 1 ]; then\n    printf')
 build = text.index('# === MU_INSTALLER_STAGE_2D_BUILD_BEGIN ===')
 install = text.index('# === MU_INSTALLER_STAGE_2E_RUNTIME_INSTALL_BEGIN ===')
 assert checkpoint < build < install
