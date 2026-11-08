@@ -28,9 +28,14 @@ mu_detect_platform() {
     )" || return 1
     mapfile -t fields <<< "$os_data"
 
-    MU_DISTRO_ID="${fields[0],,}"
-    MU_DISTRO_LIKE="${fields[1],,}"
-    MU_DISTRO_VERSION="${fields[2]}"
+    # VERSION_ID is optional (e.g. rolling-release CachyOS). Because
+    # command substitution strips trailing newlines, mapfile may not
+    # produce the final field at all. Read every os-release field safely.
+    MU_DISTRO_ID="${fields[0]:-unknown}"
+    MU_DISTRO_ID="${MU_DISTRO_ID,,}"
+    MU_DISTRO_LIKE="${fields[1]:-}"
+    MU_DISTRO_LIKE="${MU_DISTRO_LIKE,,}"
+    MU_DISTRO_VERSION="${fields[2]:-}"
     MU_HOST_ARCH="$(uname -m)"
     MU_DISTRO_STATUS="unverified"
     MU_PKG_CANDIDATE="none"
