@@ -33,8 +33,13 @@ mu_env_native_module() {
         mu_env_issue pkgconfig "$name"
         return 1
     }
-    printf '#include <%s>\nint main(void) { %s; return 0; }\n' \
-        "$header" "$expression" > "$MU_ENV_WORK/module.c"
+    if [[ "$name" == freetype2 ]]; then
+        printf '#include <ft2build.h>\n#include FT_FREETYPE_H\nint main(void) { %s; return 0; }\n' \
+            "$expression" > "$MU_ENV_WORK/module.c"
+    else
+        printf '#include <%s>\nint main(void) { %s; return 0; }\n' \
+            "$header" "$expression" > "$MU_ENV_WORK/module.c"
+    fi
     if ! mu_env_cc "$name" "$MU_ENV_WORK/module.c" \
          "$MU_ENV_WORK/module" "$flags"; then
         mu_env_issue link64 "$name"
