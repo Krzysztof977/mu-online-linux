@@ -2,6 +2,31 @@
 
 All notable project changes intended for public releases are recorded here.
 
+## 0.2.0 — CachyOS support (development branch, not tagged)
+
+### Added
+- CachyOS rolling-release discovery, native Pacman backend and 40-root
+  dependency recipe including multilib and Vulkan headers.
+- Explicitly confirmed dependency installation and independent native,
+  i386/x86_64 MinGW, graphics, GnuTLS and audio ABI validation.
+- Case-insensitive explicit consent keywords (CONTINUE and INSTALL).
+- Build/configure/runtime/prefix validation checkpoints and guarded
+  --resume-from-prefix mode.
+- --jobs N option for controlling Wine build parallelism on low-RAM VMs.
+
+### Verified
+- 2026-11-08: CachyOS x86_64 on a KVM/QEMU VM, full clean installer
+  workflow and successful game launch reported after the staged tests.
+- Patched Wine 11.6 source, full WoW64 build, private runtime installation,
+  pristine prefix creation and nine matched build/runtime artifacts.
+
+### Boundaries
+- CachyOS is verified for the tested rolling-release environment, not
+  every future rolling snapshot or GPU/driver combination.
+- Generic Arch derivatives and Gentoo are not yet fully E2E verified.
+- Stable v0.1.1 tag, archived release and four Wine patches are unchanged.
+- Proprietary MU Online and GameGuard binaries remain user-supplied.
+
 ## 0.1.1 — Nobara Linux 44 support
 
 ### Added
