@@ -134,8 +134,9 @@ bash scripts/install.sh --installer "/path/to/official-MU-installer.exe"
 ~~~
 
 The installer identifies CachyOS, checks the native Pacman backend and
-required development environment, and offers to install missing package
-roots through an explicitly confirmed `pacman -S --needed` transaction.
+the verified `cachyos-v020` package recipe, and installs missing dependency
+roots using `pacman -S --needed` with Pacman's normal transaction confirmation.
+There is no redundant installer-specific `Type INSTALL` prompt on CachyOS.
 It does **not** run `pacman -Sy` or silently upgrade the system.
 It then builds patched Wine 11.6, creates a private WoW64 prefix, runs
 the official MU installer, and configures the launcher. On a VM with
@@ -171,7 +172,17 @@ Type CONTINUE to proceed with experimental installation:
 Type **`continue`** and press Enter. `CONTINUE` and other letter-case
 variants are accepted; an empty answer, spaces added around the word, or a
 different answer is rejected. This is an **opt-in to testing**, not a claim
-that your distribution is already supported.
+that your distribution is already supported. The installer asks for
+distribution-level consent **once**, with no second consent prompt from the
+package-manager or manual-dependency helper.
+
+Automatic package names are chosen only when the distribution has a tested
+recipe: DNF on Fedora/Nobara, APT on Ubuntu, and Pacman on CachyOS. Merely
+detecting Pacman on Arch Linux does not authorize CachyOS package names.
+When there is no tested recipe, the installer runs an assisted-manual
+dependency audit. Install any missing prerequisites with your native package
+manager, press Enter to check again (or Q to quit), and continue only after
+all required compiler, 32-bit ABI and library checks pass.
 
 **Important limitations:** Linux and x86_64 are still required. The
 installer must also pass its checks for required build commands, compiler
