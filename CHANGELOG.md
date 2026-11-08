@@ -2,7 +2,7 @@
 
 All notable project changes intended for public releases are recorded here.
 
-## 0.2.0 — CachyOS support (development branch, not tagged)
+## 0.2.0 — CachyOS / Pacman support
 
 ### Added
 - CachyOS rolling-release discovery, native Pacman backend and 40-root
@@ -37,7 +37,8 @@ All notable project changes intended for public releases are recorded here.
 - CachyOS is verified for the tested rolling-release environment, not
   every future rolling snapshot or GPU/driver combination.
 - Generic Arch derivatives and Gentoo are not yet fully E2E verified.
-- Stable v0.1.1 tag, archived release and four Wine patches are unchanged.
+- Previous v0.1.1 tag and archived release remain unchanged.
+- Four Wine compatibility patches are unchanged.
 - Proprietary MU Online and GameGuard binaries remain user-supplied.
 
 ## 0.1.1 — Nobara Linux 44 support
