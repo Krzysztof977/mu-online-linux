@@ -5,6 +5,8 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 . "$SCRIPT_DIR/lib/platform-detect.sh"
+# shellcheck source=lib/consent.sh
+. "$SCRIPT_DIR/lib/consent.sh"
 . "$SCRIPT_DIR/lib/pacman-deps.sh"
 
 mode="${1:---plan}"
@@ -88,7 +90,7 @@ fi
 echo 'Only missing package roots from the fixed recipe will be requested.'
 echo 'Pacman will show its transaction and ask for separate confirmation.'
 read -r -p 'Type INSTALL to allow a pacman dependency transaction: ' consent
-if [[ "$consent" != INSTALL ]]; then
+if ! mu_consent_matches "$consent" INSTALL; then
     echo 'INSTALL_CANCELLED=True'
     exit 3
 fi
