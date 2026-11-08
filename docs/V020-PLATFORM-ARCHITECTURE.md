@@ -185,3 +185,19 @@ The standard full installation can reuse it later. `--jobs N` overrides
 For the 5.78 GiB RAM CachyOS VM, begin with `--jobs 2` to reduce peak
 memory pressure. More concurrency can be tested separately.
 Run `bash tests/test-build-only.sh` before attempting compilation.
+
+## Experimental private Wine runtime-only checkpoint
+
+After a successful `--build-only` validation, run
+`bash scripts/install.sh --runtime-only --jobs 2 --base PATH` to reuse
+the patched and configured build, repeat the artifact checks, execute
+`make install` into the **private runtime directory** and verify binaries,
+architecture, checksums and equality to build artifacts. It then exits
+**before** creating a Wine prefix or installing MU Online. The current
+runtime-only implementation still runs an incremental `make -j2` check
+before `make install`, so this is not a pure no-compilation mode.
+
+This stage changes private workspace files and can use substantial disk space.
+Run `bash tests/test-runtime-only.sh` (read-only) before attempting it.
+If a private runtime already exists, installation refuses to overwrite it.
+This is experimental and not a full release installation.
