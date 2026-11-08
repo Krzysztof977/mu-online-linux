@@ -31,6 +31,8 @@ bash tests/test-manual-deps.sh
 bash scripts/manual-deps-prepare.sh --check
 bash tests/test-v020-dependencies.sh
 bash scripts/v020-dependencies.sh --check
+bash tests/test-install-deps-only.sh
+bash scripts/install.sh --deps-only
 ```
 
 These commands do not invoke sudo, install packages, update repositories,
@@ -66,8 +68,8 @@ CachyOS remains **unverified** until a full GameGuard/MU Online end-to-end test.
 
 ## Current validator limitations
 
-The standalone audit intentionally is **not** hooked into production
-`scripts/install.sh` yet. A `V020_BUILD_ENV_PREFLIGHT_PASS=True` result
+The experimental independent audit is now included in the development
+branch's `scripts/install.sh` dependency stage; it is **not** released yet. A `V020_BUILD_ENV_PREFLIGHT_PASS=True` result
 means only that all current *experimental* probes passed; it is not a claim
 that Wine `./configure` or `make` will succeed. The check prints
 `MISSING` entries for individual failed probes and exits non-zero if any fail.
@@ -121,10 +123,21 @@ CachyOS pacman **read-only** plan or an independent manual build check.
 `--prepare` routes CachyOS to the explicitly confirmed pacman
 installation flow and other distributions to an interactive manual retry.
 The dispatcher does not invoke `scripts/install.sh` or begin Wine/MU setup.
-The Fedora/Nobara/Ubuntu production installer from v0.1.1 remains unchanged.
-We must first resolve its hardcoded distro restriction and audio .pc path
-assumptions, then run fresh VM end-to-end tests, before connecting the
-v0.2.0 dependency stage to the full installer.
+The stable Fedora/Nobara/Ubuntu production tag v0.1.1 remains unchanged.
+The v0.2.0 development branch now contains an isolated dependency-gate
+integration in `scripts/install.sh`: portable distros route to Pacman
+or manual checks, while the existing DNF/APT package recipes are retained.
+Portable systems use the common compiler/link/ABI validator in place of
+hardcoded Fedora/Ubuntu audio .pc file paths. An unverified distribution
+requires explicit interactive confirmation for a full installation.
+
+`bash scripts/install.sh --deps-only` executes patch SHA checks and the
+full dependency validation stage, but skips package installation, requires
+no MU Windows installer, and exits before downloading Wine or creating any
+Wine prefix. `--skip-deps` remains an install-time flag and must still run
+build/link/ABI validation. A successful `--deps-only` check is **not**
+evidence that Wine itself builds or that GameGuard works. Full E2E tests
+remain pending, including a fresh VM Pacman transaction.
 
 Safety policy: a detected package manager does **not** imply a validated
 recipe. A non-CachyOS Arch derivative uses manual setup until its recipe
