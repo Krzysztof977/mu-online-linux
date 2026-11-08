@@ -43,44 +43,46 @@ download Wine, create Wine prefixes, or modify OS packages. The build audit
 creates and removes temporary C/PE test binaries and produces a report. The tests supply synthetic
 `os-release` files; they do not change the host's `/etc/os-release`.
 
-## Planned acceptance criteria before integration
+## Acceptance criteria and validation
 
-- [Implemented experimentally] Add standalone command, pkg-config, header and link probes.
-- [Implemented experimentally] Validate native and 32-bit PulseAudio/ALSA
+- [Implemented and tested] Add standalone command, pkg-config, header and link probes.
+- [Implemented and tested] Validate native and 32-bit PulseAudio/ALSA
   linkability, MinGW PE32/PE32+ outputs, and selected graphics development
   modules independently of distro-specific file locations.
 - [Verified on CachyOS] Wine configure, full WoW64 compilation, private
   runtime installation and complete game E2E path.
-- [Implemented experimentally] Standalone manual setup with complete dependency
-  report, `--check` mode and `--interactive` retry loop. Requires explicit
-  continuation on unverified platforms; noninteractive invocation reports and
-  exits, never waits for input. No package installation is performed.
+- [Implemented and tested] Standalone manual setup with a complete dependency
+  report, `--check` mode and `--interactive` retry loop. The parent installer
+  requests a single `CONTINUE` for unverified platforms; the manual helper
+  does not request it again. Noninteractive invocation reports and exits.
+  The manual helper never installs packages.
 - Noninteractive mode must emit a report and exit rather than prompt.
-- [Implemented experimentally] Read-only pacman recipe audit for 40 roots,
+- [Implemented and tested] Read-only pacman recipe audit for 40 roots,
   including `vulkan-headers`, validated for package availability on CachyOS.
-- [Implemented experimentally] A separately invoked `--install` mode requires
-  a terminal, prints missing packages, asks the user to type `INSTALL`, then
-  relies on a second pacman confirmation. `--plan` is read-only and the default.
-- [Pending] Test real automated dependency installation in a fresh CachyOS VM.
-  Avoid `pacman -Sy` partial upgrades and never silently initiate a full
-  system upgrade.
+- [Implemented and tested] The `--install` Pacman mode requires a terminal
+  and a validated CachyOS package recipe, prints missing packages and uses
+  Pacman's native transaction confirmation without a redundant `INSTALL`.
+  The default `--plan` mode is read-only.
+- [User-confirmed E2E] Fresh CachyOS VM detected five missing Pacman package
+  roots and completed normal MU installation and gameplay. The separate
+  Pacman transaction transcript was not retained with the PR evidence.
+  Avoid `pacman -Sy` partial upgrades and never silently perform a full upgrade.
 - Maintain the existing four pinned Wine patches and the Wine 11.6 build path.
 - Keep v0.1.1 tags, release archives, and main unchanged.
 
 CachyOS (ID=cachyos, normally no VERSION_ID) is **verified** after a
 full GameGuard/MU Online end-to-end test on 2026-11-08. Other Arch derivatives
-remain unverified. The 40-package dependency recipe was present on the test VM;
-a real transaction installing *missing* package roots still needs a separate
-clean-VM test.
+remain unverified. The latest clean VM test began with five missing dependency roots and the
+user confirmed full installation and gameplay success.
 
 ## Current validator limitations
 
-The experimental independent audit is now included in the development
-branch's `scripts/install.sh` dependency stage; it is **not** released yet. A `V020_BUILD_ENV_PREFLIGHT_PASS=True` result
-means only that all current *experimental* probes passed; it is not a claim
-that Wine `./configure` or `make` will succeed. The check prints
-`MISSING` entries for individual failed probes and exits non-zero if any fail.
-No interactive retry flow is implemented at this phase.
+The independent audit is integrated into the v0.2.0 installer. A
+`V020_BUILD_ENV_PREFLIGHT_PASS=True` result confirms build prerequisites,
+not that Wine or GameGuard will run on every distribution. The check prints
+`MISSING` entries for failed probes and exits non-zero if any fail.
+The assisted-manual helper supports retry after Enter until all prerequisites
+pass or the user quits.
 
 ## CachyOS pacman recipe (read-only)
 
@@ -92,47 +94,46 @@ Because `pacman -Si` reads the local sync database, a stale sync database
 can produce false unavailability and must never cause an automatic `-Sy`.
 The script does not confer support status on other Arch derivatives.
 
-**Implemented:** an explicit opt-in `--install` Pacman transaction with
-`INSTALL` confirmation; the script also performs a read-only `--plan`.
-Actual missing-package transactions remain a separate test coverage item.
+**Implemented:** an interactive `--install` Pacman transaction guarded by
+the CachyOS recipe and normal Pacman transaction confirmation, with no
+extra `INSTALL` prompt; `--plan` remains read-only.
 
-## Experimental opt-in package installer
+## CachyOS package installer
 
 `bash scripts/pacman-deps-prepare.sh --plan` performs a read-only audit.
 If every package is already installed, it runs the separate build preflight.
 `bash scripts/pacman-deps-prepare.sh --install` requires an interactive
-terminal and the exact typed consent `INSTALL` before executing a standard
+terminal and the verified CachyOS recipe before executing a standard
 `pacman -S --needed` transaction. Pacman asks for its own confirmation.
 No upgrade, sync-only transaction, or `--noconfirm` is used. After installation,
 the module rechecks package roots and runs the independent build preflight.
 On absent/unsupported backends it exits rather than guessing package names;
 manual preparation is implemented in the separate manual helper.
 
-The mocked transaction tests are scoped to CachyOS and intentionally do not
-exercise a real package installation. The complete installation and gameplay
-path has passed on an already prepared CachyOS VM. A truly fresh VM with
-missing package roots should still be used to validate a real Pacman
-transaction before a tagged release.
+The mocked transaction tests deliberately do not modify packages. The fresh
+CachyOS VM had five missing dependency roots before the normal installer
+run, and the user confirmed a successful full installation and game launch.
+Retaining full package-manager logs would strengthen reproducibility evidence.
 
 ## Assisted manual dependency checks (experimental)
 
 `bash scripts/manual-deps-prepare.sh --check` runs a one-time, non-mutating
 build-environment validation. It exits nonzero if anything is missing.
 `bash scripts/manual-deps-prepare.sh --interactive` (only with a terminal)
-asks for confirmation on unverified distributions and offers **R** to rerun
-the same independent audit or **Q** to quit. It never guesses Gentoo package
+does not ask for a second distribution confirmation; pressing **Enter**
+reruns the same independent audit, while **Q** quits. It never guesses Gentoo package
 names or modifies Portage settings. On Gentoo, users need to adjust package
 USE flags and ABI_X86 as required; exact recommendations are pending a Gentoo
 VM test. When a terminal is unavailable, --interactive prints the audit and
-exits with status 3. This helper currently does **not** continue to Wine
-builds; wiring it into the main installer is a future phase.
+exits with status 3. The normal installer uses this helper when no verified
+automatic package recipe is available and proceeds only after a passing audit.
 
-## v0.2.0 standalone dispatcher (no legacy installer changes)
+## v0.2.0 standalone dispatcher and installer integration
 
 `bash scripts/v020-dependencies.sh --check` selects the experimental
 CachyOS pacman **read-only** plan or an independent manual build check.
-`--prepare` routes CachyOS to the explicitly confirmed pacman
-installation flow and other distributions to an interactive manual retry.
+`--prepare` routes CachyOS to Pacman's native confirmation flow and
+other distributions to an interactive manual retry.
 The dispatcher does not invoke `scripts/install.sh` or begin Wine/MU setup.
 The stable Fedora/Nobara/Ubuntu production tag v0.1.1 remains unchanged.
 The v0.2.0 development branch now contains an isolated dependency-gate
@@ -148,7 +149,8 @@ no MU Windows installer, and exits before downloading Wine or creating any
 Wine prefix. `--skip-deps` remains an install-time flag and must still run
 build/link/ABI validation. A successful `--deps-only` check is **not**
 evidence that Wine itself builds or that GameGuard works. Full E2E tests
-remain pending, including a fresh VM Pacman transaction.
+are established for the tested CachyOS reference; other distributions
+still require separate E2E validation.
 
 Safety policy: a detected package manager does **not** imply a validated
 recipe. A non-CachyOS Arch derivative uses manual setup until its recipe
@@ -170,17 +172,18 @@ normal full installer, which can validate and reuse it later.
 **This mode does modify its private workspace and downloads Wine sources.**
 Only `--deps-only` is read-only. The configure-only mode should be run in a
 fresh test workspace; verify free disk space and the existing release's
-`configure` checks. The full installer is not yet end-to-end verified
+`configure` checks. The full installer has since passed user-confirmed end-to-end testing
 on CachyOS.
 
-## Case-insensitive explicit confirmations
+## Single distribution-level confirmation
 
-The development branch accepts `CONTINUE` and `INSTALL` regardless of
-letter case (`continue`, `Continue`, `install`, etc.). Empty values,
-extra spaces and other words still fail. The same shared helper is used
-for the main installer, manual dependency assistant and pacman installer.
-Run `bash tests/test-consent.sh` for regression checks. This does not
-change a process that has already started from an older checkout.
+The installer accepts `CONTINUE` regardless of letter case (`continue`,
+`Continue`, etc.) on unverified distributions. Empty values, extra spaces
+and other words still fail. The manual dependency and Pacman helpers do not
+repeat this consent prompt; Pacman retains its own transaction confirmation.
+Run `bash tests/test-consent.sh` and `bash tests/test-consent-routing.sh`
+for regression checks. This does not change an installer already running
+from an older checkout.
 
 ## Experimental build-only checkpoint
 
@@ -229,9 +232,9 @@ unverified distributions. Do not run it again after a successful prefix
 creation: it refuses to overwrite an existing prefix.
 Run `bash tests/test-prefix-only.sh` before the first real attempt.
 
-Note: this standalone checkpoint does not yet make the normal full installer
-resume automatically from an existing runtime/prefix. Such reuse needs a
-separate, carefully tested path to avoid silent modifications or loss of data.
+The separate `--resume-from-prefix` mode now supports guarded reuse of a
+previously validated pristine prefix; the normal full installer deliberately
+does not silently reuse an existing prefix.
 
 ## Resume after confirmed pristine prefix (experimental)
 
@@ -266,6 +269,7 @@ The status `verified` in `scripts/lib/platform-detect.sh` is restricted to
 `ID=cachyos` without `VERSION_ID`, in line with the tested rolling-release
 os-release. The `cachyos-v020` recipe is bound to a native Pacman backend.
 This is a tested environment, not a guarantee for all later CachyOS rolling
-snapshots or every GPU/driver combination. Full v0.2.0 release packaging,
-bootstrap update and clean missing-dependency transactions are separate
-release steps. The v0.1.1 tag remains unmodified.
+snapshots or every GPU/driver combination. A clean VM run with five initially
+missing dependency roots and subsequent gameplay was user-confirmed.
+Release packaging, versioned bootstrap and SHA-256 publication remain
+separate steps; the v0.1.1 tag is unchanged.
