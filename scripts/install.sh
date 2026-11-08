@@ -639,6 +639,8 @@ printf 'Architecture: %s\n' "$(uname -m)"
 . "$SCRIPT_DIR/lib/platform-detect.sh"
 mu_detect_platform || die "platform detection failed"
 mu_platform_report
+# shellcheck source=lib/consent.sh
+. "$SCRIPT_DIR/lib/consent.sh"
 
 case "${ID:-}" in
     fedora)
@@ -690,7 +692,7 @@ if [ "$DEPS_ONLY" -eq 0 ] &&
     printf '%s\n' "MU Online compatibility and GameGuard have not been validated here."
     read -r -p 'Type CONTINUE to proceed with experimental installation: ' CONSENT ||
         die "confirmation not received"
-    [ "$CONSENT" = CONTINUE ] || die "experimental installation not approved"
+    mu_consent_matches "$CONSENT" CONTINUE || die "experimental installation not approved"
 fi
 
 log "Repository validation"
