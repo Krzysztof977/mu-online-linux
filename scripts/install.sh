@@ -2538,25 +2538,29 @@ fi
 
 printf 'FIRST_WINEBOOT_RUNTIME_OWNERSHIP_OK=True\n'
 
-log "Stop prefix cleanly after initialization"
+log "Wait for Wine prefix initialization to finish"
 
-env \
+# wineboot -u can exit successfully while Wine services are still populating
+# the new prefix, including the 32-bit SysWOW64 directory. Never call
+# wineserver -k on the successful initialization path: it can interrupt
+# that work and leave an incomplete WoW64 prefix.
+if timeout 300 env \
     WINEPREFIX="$PREFIX" \
     PATH="$PINNED_PATH" \
     WINESERVER="$RUNTIME/bin/wineserver" \
-    "$RUNTIME/bin/wineserver" \
-    -k \
-    2>/dev/null ||
-    true
-
-env \
-    WINEPREFIX="$PREFIX" \
-    PATH="$PINNED_PATH" \
-    WINESERVER="$RUNTIME/bin/wineserver" \
+    WINEDEBUG=-all \
     "$RUNTIME/bin/wineserver" \
     -w \
-    2>/dev/null ||
-    die "wineserver did not stop cleanly"
+    >>"$WINEBOOT_LOG" 2>&1
+then
+    printf 'PREFIX_WINESERVER_WAIT_RC=0\n'
+else
+    PREFIX_WINESERVER_WAIT_RC=$?
+    printf 'PREFIX_WINESERVER_WAIT_RC=%s\n' "$PREFIX_WINESERVER_WAIT_RC"
+    printf '\n--- WINEBOOT LOG TAIL ---\n'
+    tail -n 120 "$WINEBOOT_LOG" || true
+    die "prefix initialization did not finish cleanly (wineserver -w rc=$PREFIX_WINESERVER_WAIT_RC)"
+fi
 
 printf 'PREFIX_WINESERVER_STOPPED=True\n'
 
