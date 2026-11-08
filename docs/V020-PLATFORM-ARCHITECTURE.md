@@ -1,7 +1,9 @@
 # v0.2.0: platform-independent dependency preflight
 
-This is an experimental, read-only module. The production installer remains
-`scripts/install.sh` from v0.1.1 until the new dependency flow is fully tested.
+This document records the v0.2.0 development milestones. CachyOS x86_64 has
+now passed a complete clean installation and gameplay test (2026-11-08).
+Stable tagged v0.1.1 remains unchanged. Individual read-only audit helpers
+are distinguished from the normal installer, which modifies the system.
 
 ## Three independent decisions
 
@@ -47,8 +49,8 @@ creates and removes temporary C/PE test binaries and produces a report. The test
 - [Implemented experimentally] Validate native and 32-bit PulseAudio/ALSA
   linkability, MinGW PE32/PE32+ outputs, and selected graphics development
   modules independently of distro-specific file locations.
-- [Pending] Broaden Wine configure coverage and verify end-to-end compilation
-  before treating a successful audit as a sufficient Wine build gate.
+- [Verified on CachyOS] Wine configure, full WoW64 compilation, private
+  runtime installation and complete game E2E path.
 - [Implemented experimentally] Standalone manual setup with complete dependency
   report, `--check` mode and `--interactive` retry loop. Requires explicit
   continuation on unverified platforms; noninteractive invocation reports and
@@ -65,7 +67,11 @@ creates and removes temporary C/PE test binaries and produces a report. The test
 - Maintain the existing four pinned Wine patches and the Wine 11.6 build path.
 - Keep v0.1.1 tags, release archives, and main unchanged.
 
-CachyOS remains **unverified** until a full GameGuard/MU Online end-to-end test.
+CachyOS (ID=cachyos, normally no VERSION_ID) is **verified** after a
+full GameGuard/MU Online end-to-end test on 2026-11-08. Other Arch derivatives
+remain unverified. The 40-package dependency recipe was present on the test VM;
+a real transaction installing *missing* package roots still needs a separate
+clean-VM test.
 
 ## Current validator limitations
 
@@ -86,7 +92,9 @@ Because `pacman -Si` reads the local sync database, a stale sync database
 can produce false unavailability and must never cause an automatic `-Sy`.
 The script does not confer support status on other Arch derivatives.
 
-**Not implemented:** automatic transaction execution and interactive retry.
+**Implemented:** an explicit opt-in `--install` Pacman transaction with
+`INSTALL` confirmation; the script also performs a read-only `--plan`.
+Actual missing-package transactions remain a separate test coverage item.
 
 ## Experimental opt-in package installer
 
@@ -97,12 +105,14 @@ terminal and the exact typed consent `INSTALL` before executing a standard
 `pacman -S --needed` transaction. Pacman asks for its own confirmation.
 No upgrade, sync-only transaction, or `--noconfirm` is used. After installation,
 the module rechecks package roots and runs the independent build preflight.
-On absent/unverified backend it exits rather than guessing package names;
-interactive guided-manual retry is a later development step.
+On absent/unsupported backends it exits rather than guessing package names;
+manual preparation is implemented in the separate manual helper.
 
 The mocked transaction tests are scoped to CachyOS and intentionally do not
-exercise a real package installation. Before release, test the installer with
-missing dependencies on a disposable VM snapshot.
+exercise a real package installation. The complete installation and gameplay
+path has passed on an already prepared CachyOS VM. A truly fresh VM with
+missing package roots should still be used to validate a real Pacman
+transaction before a tagged release.
 
 ## Assisted manual dependency checks (experimental)
 
@@ -240,3 +250,22 @@ confirmation. Tests: `bash tests/test-resume-from-prefix.sh`.
 If any stage fails, inspect logs before trying again: the initial prefix
 pristine-state guard may reject an incomplete MU install. Never remove an
 existing prefix automatically.
+
+## Full end-to-end CachyOS verification — 2026-11-08
+
+The user completed a clean run of the regular `scripts/install.sh` command
+(with `--jobs 2` to constrain Wine compilation) using a separately obtained,
+SHA-256-verified official MU installer on the CachyOS KVM/QEMU x86_64 VM.
+The user confirmed that the installation and game run fully worked.
+Previous staged runs explicitly confirmed Wine configure, compilation,
+runtime installation, WoW64 prefix initialization and runtime ownership.
+The normal installer was invoked after removing the prior prefix and
+confirming that the default installation workspace did not exist.
+
+The status `verified` in `scripts/lib/platform-detect.sh` is restricted to
+`ID=cachyos` without `VERSION_ID`, in line with the tested rolling-release
+os-release. The `cachyos-v020` recipe is bound to a native Pacman backend.
+This is a tested environment, not a guarantee for all later CachyOS rolling
+snapshots or every GPU/driver combination. Full v0.2.0 release packaging,
+bootstrap update and clean missing-dependency transactions are separate
+release steps. The v0.1.1 tag remains unmodified.
