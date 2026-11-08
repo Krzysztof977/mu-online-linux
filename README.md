@@ -188,10 +188,10 @@ For version 0.1.1, the recommended entry point is the tagged bootstrap
 script. The official MU Online Windows installer must already be downloaded
 separately from Webzen and present locally.
 
-Before running the command below:
+Before installing:
 
-1. The command is an example. Replace `User_name` in GitHub URLs with
-   the actual repository owner's username. Replace
+1. For the repository checkout below, replace `User_name` in the
+   GitHub URL with the actual repository owner's username. Replace
    `/path/to/official-MU-installer.exe` with the actual path to the official
    MU Online installer on your computer. Keep the path in quotes, especially
    if it contains spaces.
@@ -211,11 +211,6 @@ Before running the command below:
    compatibility package. It does not download or redistribute MU Online,
    nProtect GameGuard, or other proprietary game files.
 
-Example:
-
-~~~bash
-curl -fsSL https://raw.githubusercontent.com/User_name/mu-online-linux/v0.1.1/bootstrap.sh | bash -s -- --installer "/path/to/official-MU-installer.exe"
-~~~
 
 The bootstrap downloads the matching versioned release archive, verifies its
 SHA256 checksum, extracts it to a temporary directory, runs the archived
