@@ -7,7 +7,8 @@ All notable project changes intended for public releases are recorded here.
 ### Added
 - CachyOS rolling-release discovery, native Pacman backend and 40-root
   dependency recipe including multilib and Vulkan headers.
-- Explicitly confirmed dependency installation and independent native,
+- Automatic missing-package installation with the verified CachyOS recipe
+  using Pacman's native transaction confirmation, and independent native,
   i386/x86_64 MinGW, graphics, GnuTLS and audio ABI validation.
 - No hard-coded distribution allowlist: a Linux x86_64 system with an
   untested distribution ID is not rejected solely by its OS name.
@@ -15,14 +16,20 @@ All notable project changes intended for public releases are recorded here.
   experimental path after the user types `CONTINUE` (also accepts
   `continue`, case-insensitively). Build/toolchain/ABI verification is
   mandatory; missing or unsupported dependencies still block installation.
-- Case-insensitive explicit consent keywords (CONTINUE and INSTALL).
+- A single case-insensitive `CONTINUE` consent for unverified distributions;
+  no redundant package-manager or assisted-manual consent prompt.
+- Assisted-manual dependency recheck after Enter when no verified
+  automatic package recipe exists.
 - Build/configure/runtime/prefix validation checkpoints and guarded
   --resume-from-prefix mode.
 - --jobs N option for controlling Wine build parallelism on low-RAM VMs.
 
 ### Verified
-- 2026-11-08: CachyOS x86_64 on a KVM/QEMU VM, full clean installer
-  workflow and successful game launch reported after the staged tests.
+- 2026-11-08: CachyOS x86_64 on a fresh KVM/QEMU VM; the installer
+  detected five missing package roots, ran the native Pacman dependency
+  transaction, and the user confirmed the full MU Online/game launch worked.
+- Dependency-routing, platform-detection, consent and negative-safety tests
+  passed on the test CachyOS VM after the final consent-flow changes.
 - Patched Wine 11.6 source, full WoW64 build, private runtime installation,
   pristine prefix creation and nine matched build/runtime artifacts.
 
