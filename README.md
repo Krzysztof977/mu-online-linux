@@ -115,12 +115,11 @@ For version 0.1.1, the recommended entry point is the tagged bootstrap
 script. The official MU Online Windows installer must already be downloaded
 separately from Webzen and present locally.
 
-Before running the command below:
+Before installing:
 
-1. The command is an example. Replace
-   `/path/to/official-MU-installer.exe` with the actual path to the official
-   MU Online installer on your computer. Keep the path in quotes, especially
-   if it contains spaces.
+1. Supply the actual path to the official MU Online installer on your
+   computer instead of `/path/to/official-MU-installer.exe`. Keep the path in
+   quotes, especially if it contains spaces.
 2. The full installation can take **30 minutes or more**, depending on CPU
    performance, storage speed, network speed, and package download times.
    Building Wine is the longest stage and may appear inactive for periods of
@@ -137,11 +136,6 @@ Before running the command below:
    compatibility package. It does not download or redistribute MU Online,
    nProtect GameGuard, or other proprietary game files.
 
-Example:
-
-~~~bash
-curl -fsSL https://raw.githubusercontent.com/Krzysztof977/mu-online-linux/v0.1.1/bootstrap.sh | bash -s -- --installer "/path/to/official-MU-installer.exe"
-~~~
 
 The bootstrap downloads the matching versioned release archive, verifies its
 SHA256 checksum, extracts it to a temporary directory, runs the archived
