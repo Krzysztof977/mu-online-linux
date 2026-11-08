@@ -94,6 +94,11 @@ Fully tested reference systems:
 | Kubuntu 26.04.1 / Ubuntu 26.04 base | x86_64 | Full E2E verified |
 | CachyOS rolling release (tested on KVM/QEMU, 2026-11-08) | x86_64 | Full E2E verified for v0.2.0 |
 
+The Fedora, Nobara and Kubuntu E2E results were obtained during previous
+release verification; v0.2.0 preserves their automatic DNF/APT paths
+and passed regression tests, but a separate full v0.2.0 E2E run was
+not repeated on those systems. CachyOS completed a full v0.2.0 E2E run.
+
 Fedora and Nobara releases other than 44, and Ubuntu releases other
 than 26.04, are not currently reference-tested.
 
@@ -115,12 +120,17 @@ The MU Online installer is not included in this repository.
 
 ## Installation
 
-### CachyOS — v0.2.0 (E2E tested)
+### v0.2.0 — Fedora, Nobara, Ubuntu and CachyOS
 
-CachyOS support is introduced in v0.2.0; it is not included in the
-v0.1.1 release. Download the official MU Online Windows installer
-separately. On CachyOS x86_64 with multilib enabled, use the v0.2.0
-tagged source release:
+**v0.2.0 is the current stable release for all four verified reference
+systems:** Fedora 44, Nobara Linux 44, Ubuntu 26.04 (including the tested
+Kubuntu 26.04.1) and CachyOS rolling x86_64. The same installation command
+is used on each system; the installer selects the appropriate native
+dependency backend automatically.
+
+Download the official MU Online Windows installer separately from Webzen.
+Replace `/path/to/official-MU-installer.exe` below with its actual location
+and keep the path quoted:
 
 ~~~bash
 git clone --branch v0.2.0 \
@@ -129,109 +139,42 @@ cd mu-online-linux
 bash scripts/install.sh --installer "/path/to/official-MU-installer.exe"
 ~~~
 
-The installer identifies CachyOS, checks the native Pacman backend and
-the verified `cachyos-v020` package recipe, and installs missing dependency
-roots using `pacman -S --needed` with Pacman's normal transaction confirmation.
-There is no redundant installer-specific `Type INSTALL` prompt on CachyOS.
-It does **not** run `pacman -Sy` or silently upgrade the system.
-It then builds patched Wine 11.6, creates a private WoW64 prefix, runs
-the official MU installer, and configures the launcher. On a VM with
-limited RAM, add `--jobs 2` to limit parallel compilation.
-
-The reported end-to-end CachyOS test used KVM/QEMU, six virtual Ryzen
-cores, approximately 5.78 GiB RAM, and completed a clean end-user
-installation and game launch on November 8, 2026. This verification
-does not imply that other Arch-based distributions or GPU/driver
-combinations are already validated.
-
-### Other distributions — unverified v0.2.0 path
-
-**There is no hard-coded Linux distribution allowlist.** On a distribution
-that has not passed end-to-end testing, the v0.2.0 installer does not refuse
-installation merely because the OS name is unfamiliar. It identifies the
-platform and available package manager, marks the OS as **unverified**, and
-requires an explicit interactive confirmation before continuing.
-
-Run the development installer normally with your own official MU Online
-Windows installer:
+On a memory-limited machine, add `--jobs 2` to limit Wine compilation
+parallelism, for example:
 
 ~~~bash
-bash scripts/install.sh --installer "/path/to/official-MU-installer.exe"
-~~~
-
-When prompted on an unverified system:
-
-~~~text
-Type CONTINUE to proceed with experimental installation:
-~~~
-
-Type **`continue`** and press Enter. `CONTINUE` and other letter-case
-variants are accepted; an empty answer, spaces added around the word, or a
-different answer is rejected. This is an **opt-in to testing**, not a claim
-that your distribution is already supported. The installer asks for
-distribution-level consent **once**, with no second consent prompt from the
-package-manager or manual-dependency helper.
-
-Automatic package names are chosen only when the distribution has a tested
-recipe: DNF on Fedora/Nobara, APT on Ubuntu, and Pacman on CachyOS. Merely
-detecting Pacman on Arch Linux does not authorize CachyOS package names.
-When there is no tested recipe, the installer runs an assisted-manual
-dependency audit. Install any missing prerequisites with your native package
-manager, press Enter to check again (or Q to quit), and continue only after
-all required compiler, 32-bit ABI and library checks pass.
-
-**Important limitations:** Linux and x86_64 are still required. The
-installer must also pass its checks for required build commands, compiler
-and linker output, 32/64-bit ABI, graphics, networking and audio libraries.
-Unknown or unsupported package-manager recipes use guided **manual
-dependency preparation** rather than guessing package names; missing
-dependencies or failed checks stop installation. The consent prompt
-requires an interactive terminal. The installer does not bypass GameGuard
-or guarantee that MU Online works on an untested distribution.
-
-### Stable v0.1.1 — Fedora, Nobara, and Ubuntu
-
-For version 0.1.1, the recommended entry point is the tagged bootstrap
-script. The official MU Online Windows installer must already be downloaded
-separately from Webzen and present locally.
-
-Before installing:
-
-1. Replace `/path/to/official-MU-installer.exe` with the actual path to
-   the official MU Online installer on your computer. Keep the path in
-   quotes, especially if it contains spaces.
-2. The full installation can take **30 minutes or more**, depending on CPU
-   performance, storage speed, network speed, and package download times.
-   Building Wine is the longest stage and may appear inactive for periods of
-   time. Do not interrupt the installer or reboot the system unless an actual
-   error is reported.
-3. If Wine asks to install **Wine Mono** or **Wine Gecko**, choose
-   **Install**. If both prompts appear, install both components.
-4. When the installation finishes, the installer prints the next step and
-   launch instructions in the terminal.
-5. On the first launch, a small dialog may appear with garbled or unreadable
-   text because of the game's legacy character encoding. This is expected;
-   click **OK** and continue.
-6. The bootstrap downloads and verifies only the MU Online Linux
-   compatibility package. It does not download or redistribute MU Online,
-   nProtect GameGuard, or other proprietary game files.
-
-
-The bootstrap downloads the matching versioned release archive, verifies its
-SHA256 checksum, extracts it to a temporary directory, runs the archived
-`scripts/install.sh` with the supplied arguments, and removes the temporary
-files after the installer exits.
-
-Advanced users may instead use a tagged source checkout:
-
-~~~bash
-git clone https://github.com/Krzysztof977/mu-online-linux.git
-cd mu-online-linux
-git checkout v0.1.1
-
-./scripts/install.sh \
+bash scripts/install.sh --jobs 2 \
     --installer "/path/to/official-MU-installer.exe"
 ~~~
+
+Alternatively, download the **tagged v0.2.0 bootstrap** and run it with
+the same installer path:
+
+~~~bash
+curl --fail --location --silent --show-error \
+    --proto '=https' --proto-redir '=https' \
+    --output mu-online-linux-bootstrap-v0.2.0.sh \
+    https://raw.githubusercontent.com/Krzysztof977/mu-online-linux/v0.2.0/bootstrap.sh
+bash mu-online-linux-bootstrap-v0.2.0.sh \
+    --installer "/path/to/official-MU-installer.exe"
+~~~
+
+The bootstrap downloads the versioned MU Online Linux compatibility
+archive, verifies its pinned SHA256 digest and the `SHA256SUMS` release
+asset, extracts the archive, invokes the archived installer and cleans
+up its temporary files. Neither the bootstrap nor the archive includes
+the proprietary MU Online or GameGuard binaries.
+
+**Before installing:**
+
+1. The full installation may take **30 minutes or longer**. Compiling
+   Wine is the longest stage; periods without terminal output can be
+   normal. Do not interrupt or reboot unless an actual error occurs.
+2. If Wine offers to install **Wine Mono** or **Wine Gecko**, choose
+   **Install** for the offered components.
+3. When the installer completes, follow its printed game-launch instructions.
+4. On the first game launch, a dialog may show unreadable text because of
+   legacy character encoding; acknowledge it with **OK** and continue.
 
 The default private installation area is:
 
@@ -239,21 +182,112 @@ The default private installation area is:
 ~/.local/share/mu-online-linux
 ~~~
 
-The installer also accepts:
+Additional options include:
 
 ~~~text
 --base PATH
     Override the private installation workspace.
 
+--jobs N
+    Set Wine build parallelism (positive integer).
+
 --skip-deps
-    Do not install system dependencies.
+    Skip installing system packages (prerequisite validation still applies).
 
 -h, --help
     Show installer usage.
 ~~~
 
-A normal user should not use `--skip-deps` unless all required dependencies
-are already installed.
+Normal installations should not use `--skip-deps` unless the required
+system dependencies are already installed.
+
+### Distribution-specific dependency handling
+
+The installer separates distribution verification, package-manager
+detection and a validated package recipe.
+
+| Tested reference system | Package manager | Dependency recipe |
+| --- | --- | --- |
+| Fedora 44 x86_64 | DNF | `fedora-v011` |
+| Nobara Linux 44 x86_64 | DNF | `fedora-v011` |
+| Ubuntu 26.04 / Kubuntu 26.04.1 x86_64 | APT | `ubuntu-v011` |
+| CachyOS rolling x86_64 | Pacman | `cachyos-v020` |
+
+- **Fedora / Nobara:** installs required packages using
+  `dnf install -y`, retaining the Fedora-family dependency path.
+- **Ubuntu / Kubuntu:** uses `apt-get update` followed by
+  `apt-get install -y`. Ubuntu-based distributions must report
+  `ID=ubuntu` to use the verified Ubuntu recipe.
+- **CachyOS:** checks native Pacman, multilib and the verified 40-root
+  dependency recipe, installing missing roots with
+  `pacman -S --needed` and Pacman's native transaction confirmation.
+  It does not add a separate `Type INSTALL` prompt, run `pacman -Sy`
+  or silently upgrade the system.
+
+After dependency preparation, the installer builds the pinned private
+patched Wine 11.6, initializes its own WoW64 prefix and installs the
+user-supplied official MU Online client. GameGuard remains enabled.
+
+**Verification scope:** complete E2E testing of Fedora 44, Nobara 44 and
+Kubuntu 26.04.1 was performed for earlier versions; their existing
+DNF/APT installation paths are retained in v0.2.0 and regression-tested.
+A fresh end-to-end run of v0.2.0 itself was completed on CachyOS in
+KVM/QEMU on November 8, 2026 (six virtual Ryzen cores, about 5.78 GiB
+RAM). That test does not guarantee every future CachyOS rolling snapshot,
+GPU or driver combination.
+
+### Other distributions — experimental (unverified)
+
+The v0.2.0 installer does not reject an unfamiliar distribution solely
+because of its name. It can attempt an experimental install on another
+Linux x86_64 system, but **unverified does not mean supported**.
+
+Run the same `v0.2.0` installer with your own official MU Online Windows
+installer. On an unverified distribution, the installer asks once:
+
+~~~text
+Type CONTINUE to proceed with experimental installation:
+~~~
+
+Type `continue` (or `CONTINUE`; the match is case-insensitive) and press
+Enter. Empty input, surrounding spaces and other words are rejected.
+The confirmation requires an interactive terminal and is not repeated
+by the package-manager or manual-dependency helper.
+
+A detected package manager does **not** automatically authorize a tested
+package recipe. In particular, generic Arch Linux and other Arch
+derivatives do not receive the CachyOS recipe merely because they use
+Pacman. When no validated recipe exists, the installer offers
+assisted-manual dependency preparation: install missing dependencies
+using your native package manager, press **Enter** to recheck or **Q**
+to quit. The build/toolchain, 32/64-bit ABI, graphics, network and audio
+prerequisites must pass before installation can proceed.
+
+Versions outside the tested Fedora/Nobara/Ubuntu reference set are
+also classified as unverified. Gentoo, generic Arch derivatives and
+openSUSE have not passed this project's full E2E verification. The
+experimental path does not bypass GameGuard or guarantee successful
+gameplay.
+
+### Previous releases — v0.1.1 (historical)
+
+The earlier **v0.1.1** release remains available for users who
+specifically need it. It was tested with Fedora 44, Nobara Linux 44
+and Ubuntu 26.04/Kubuntu 26.04.1, but **v0.2.0 is the recommended current
+release for those distributions as well**.
+
+[MU Online Linux v0.1.1 — GitHub Release](https://github.com/Krzysztof977/mu-online-linux/releases/tag/v0.1.1)
+
+For a historical checkout, select the old tag explicitly:
+
+~~~bash
+git clone --branch v0.1.1 \
+    https://github.com/Krzysztof977/mu-online-linux.git
+cd mu-online-linux
+bash scripts/install.sh --installer "/path/to/official-MU-installer.exe"
+~~~
+
+The v0.1.1 tag, published release archive and checksum remain unchanged.
 
 ## Installation stages
 
