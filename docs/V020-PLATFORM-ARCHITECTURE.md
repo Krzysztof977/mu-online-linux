@@ -29,6 +29,8 @@ bash tests/test-pacman-prepare.sh
 bash scripts/pacman-deps-prepare.sh --plan
 bash tests/test-manual-deps.sh
 bash scripts/manual-deps-prepare.sh --check
+bash tests/test-v020-dependencies.sh
+bash scripts/v020-dependencies.sh --check
 ```
 
 These commands do not invoke sudo, install packages, update repositories,
@@ -111,3 +113,19 @@ USE flags and ABI_X86 as required; exact recommendations are pending a Gentoo
 VM test. When a terminal is unavailable, --interactive prints the audit and
 exits with status 3. This helper currently does **not** continue to Wine
 builds; wiring it into the main installer is a future phase.
+
+## v0.2.0 standalone dispatcher (no legacy installer changes)
+
+`bash scripts/v020-dependencies.sh --check` selects the experimental
+CachyOS pacman **read-only** plan or an independent manual build check.
+`--prepare` routes CachyOS to the explicitly confirmed pacman
+installation flow and other distributions to an interactive manual retry.
+The dispatcher does not invoke `scripts/install.sh` or begin Wine/MU setup.
+The Fedora/Nobara/Ubuntu production installer from v0.1.1 remains unchanged.
+We must first resolve its hardcoded distro restriction and audio .pc path
+assumptions, then run fresh VM end-to-end tests, before connecting the
+v0.2.0 dependency stage to the full installer.
+
+Safety policy: a detected package manager does **not** imply a validated
+recipe. A non-CachyOS Arch derivative uses manual setup until its recipe
+has been independently verified. The `--check` mode never changes packages.
