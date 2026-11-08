@@ -171,3 +171,17 @@ extra spaces and other words still fail. The same shared helper is used
 for the main installer, manual dependency assistant and pacman installer.
 Run `bash tests/test-consent.sh` for regression checks. This does not
 change a process that has already started from an older checkout.
+
+## Experimental build-only checkpoint
+
+`bash scripts/install.sh --build-only --jobs 2 --base PATH` performs
+preflight, validates the four pinned patches, reuses the already configured
+Wine 11.6 source/build directories and runs `make -j2`. On success it
+validates PE32/PE32+ and UNIX audio build artifacts and exits **before**
+`make install`, prefix creation or game installation.
+The build is written into the private PATH workspace; it is not read-only.
+The standard full installation can reuse it later. `--jobs N` overrides
+`nproc` without changing the default behaviour for existing users.
+For the 5.78 GiB RAM CachyOS VM, begin with `--jobs 2` to reduce peak
+memory pressure. More concurrency can be tested separately.
+Run `bash tests/test-build-only.sh` before attempting compilation.
