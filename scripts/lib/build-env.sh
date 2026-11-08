@@ -43,7 +43,8 @@ mu_env_native_module() {
     if ! mu_env_cc "$name" "$MU_ENV_WORK/module.c" \
          "$MU_ENV_WORK/module" "$flags"; then
         mu_env_issue link64 "$name"
-        printf 'DETAIL   %s\n' "$(tail -n 2 "$MU_ENV_WORK/compile.log" | tr '\n' ' ')" 
+        # Include the actual compiler diagnostic, not just the last caret line.
+        sed -n '1,8{s/^/DETAIL   /;p;}' "$MU_ENV_WORK/compile.log"
         return 1
     fi
     mu_env_pass link64 "$name"
@@ -90,7 +91,8 @@ EOF
         "${flags_array[@]}" -o "$MU_ENV_WORK/audio32" \
         >"$MU_ENV_WORK/compile.log" 2>&1; then
         mu_env_issue link32 "libpulse+alsa"
-        printf 'DETAIL   %s\n' "$(tail -n 2 "$MU_ENV_WORK/compile.log" | tr '\n' ' ')"
+        # Include the actual compiler diagnostic, not just the last caret line.
+        sed -n '1,8{s/^/DETAIL   /;p;}' "$MU_ENV_WORK/compile.log"
         return 1
     fi
     if ! file -b "$MU_ENV_WORK/audio32" | grep -q 'ELF 32-bit'; then
@@ -120,7 +122,8 @@ EOF
         -o "$MU_ENV_WORK/windows-${arch}.exe" \
         >"$MU_ENV_WORK/compile.log" 2>&1; then
         mu_env_issue mingw "$arch"
-        printf 'DETAIL   %s\n' "$(tail -n 2 "$MU_ENV_WORK/compile.log" | tr '\n' ' ')"
+        # Include the actual compiler diagnostic, not just the last caret line.
+        sed -n '1,8{s/^/DETAIL   /;p;}' "$MU_ENV_WORK/compile.log"
         return 1
     fi
     if ! file -b "$MU_ENV_WORK/windows-${arch}.exe" | grep -Fq "$expected"; then
