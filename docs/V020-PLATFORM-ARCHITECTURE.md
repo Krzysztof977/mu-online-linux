@@ -27,6 +27,8 @@ bash tests/test-pacman-deps.sh
 bash scripts/pacman-deps-audit.sh
 bash tests/test-pacman-prepare.sh
 bash scripts/pacman-deps-prepare.sh --plan
+bash tests/test-manual-deps.sh
+bash scripts/manual-deps-prepare.sh --check
 ```
 
 These commands do not invoke sudo, install packages, update repositories,
@@ -42,7 +44,10 @@ creates and removes temporary C/PE test binaries and produces a report. The test
   modules independently of distro-specific file locations.
 - [Pending] Broaden Wine configure coverage and verify end-to-end compilation
   before treating a successful audit as a sufficient Wine build gate.
-- Add a controlled manual retry loop for unknown/unsupported backends.
+- [Implemented experimentally] Standalone manual setup with complete dependency
+  report, `--check` mode and `--interactive` retry loop. Requires explicit
+  continuation on unverified platforms; noninteractive invocation reports and
+  exits, never waits for input. No package installation is performed.
 - Noninteractive mode must emit a report and exit rather than prompt.
 - [Implemented experimentally] Read-only pacman recipe audit for 40 roots,
   including `vulkan-headers`, validated for package availability on CachyOS.
@@ -93,3 +98,16 @@ interactive guided-manual retry is a later development step.
 The mocked transaction tests are scoped to CachyOS and intentionally do not
 exercise a real package installation. Before release, test the installer with
 missing dependencies on a disposable VM snapshot.
+
+## Assisted manual dependency checks (experimental)
+
+`bash scripts/manual-deps-prepare.sh --check` runs a one-time, non-mutating
+build-environment validation. It exits nonzero if anything is missing.
+`bash scripts/manual-deps-prepare.sh --interactive` (only with a terminal)
+asks for confirmation on unverified distributions and offers **R** to rerun
+the same independent audit or **Q** to quit. It never guesses Gentoo package
+names or modifies Portage settings. On Gentoo, users need to adjust package
+USE flags and ABI_X86 as required; exact recommendations are pending a Gentoo
+VM test. When a terminal is unavailable, --interactive prints the audit and
+exits with status 3. This helper currently does **not** continue to Wine
+builds; wiring it into the main installer is a future phase.
