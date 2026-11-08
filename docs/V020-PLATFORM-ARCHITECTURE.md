@@ -222,3 +222,21 @@ Run `bash tests/test-prefix-only.sh` before the first real attempt.
 Note: this standalone checkpoint does not yet make the normal full installer
 resume automatically from an existing runtime/prefix. Such reuse needs a
 separate, carefully tested path to avoid silent modifications or loss of data.
+
+## Resume after confirmed pristine prefix (experimental)
+
+`bash scripts/install.sh --resume-from-prefix --installer PATH_TO_OFFICIAL_EXE --base PATH`
+uses the previously verified private Wine runtime and existing WoW64 prefix.
+It never starts Wine download, configure, build, make install, or wineboot.
+Before changing the prefix it checks pinned patch SHA values, matches all nine
+built/runtime artifact pairs, confirms the prefix contains both i386 and
+x86_64 Windows components, and refuses to proceed if MU or the GameGuard
+service/driver already exists. It then executes existing unmodified stages
+3B..3E: official MU client installation, service-record compatibility setup,
+launcher creation and desktop integration. This mode **does install MU** and
+requires the user's supplied official Windows installer; it is not a dry run.
+On unverified distributions it requires the explicit interactive CONTINUE
+confirmation. Tests: `bash tests/test-resume-from-prefix.sh`.
+If any stage fails, inspect logs before trying again: the initial prefix
+pristine-state guard may reject an incomplete MU install. Never remove an
+existing prefix automatically.
