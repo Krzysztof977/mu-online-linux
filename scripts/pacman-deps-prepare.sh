@@ -64,6 +64,10 @@ fi
 if (( ${#MU_PACMAN_MISSING[@]} == 0 )); then
     if (( unavailable != 0 )); then
         echo 'PACMAN_MANUAL_FALLBACK_REQUIRED=True'
+        if [[ "$mode" == --plan ]]; then
+            echo 'READ_ONLY_PLAN=True'
+            exit 0
+        fi
         exit 4
     fi
     echo
