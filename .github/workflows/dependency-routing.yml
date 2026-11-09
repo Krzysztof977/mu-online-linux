@@ -1,0 +1,35 @@
+name: Dependency routing regressions
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/**'
+      - 'tests/**'
+      - '.github/workflows/dependency-routing.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  native-and-manual:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out proposed changes
+        uses: actions/checkout@v4
+      - name: Syntax check all Bash scripts
+        shell: bash
+        run: |
+          set -euo pipefail
+          find scripts tests -type f -name '*.sh' -print0 |
+            xargs -0 -r -n1 bash -n
+      - name: Run isolated native dependency and consent tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash tests/test-consent-routing.sh
+          bash tests/test-experimental-managers.sh
+          bash tests/test-platform-detect.sh
+          bash tests/test-pacman-deps.sh
+          bash tests/test-consent.sh
+          bash tests/test-manual-deps.sh
+          bash tests/test-build-env.sh
