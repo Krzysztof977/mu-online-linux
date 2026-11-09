@@ -1190,13 +1190,57 @@ if [ "$SKIP_DEPS" -eq 0 ]; then
             ;;
 
         portable)
-            # A detected package manager is not automatically a tested recipe.
-            # Unverified distributions receive a single CONTINUE prompt above.
-            if [ "$MU_PKG_BACKEND" = pacman ] &&
-               [ "$MU_PKG_RECIPE" = cachyos-v020 ]; then
-                bash "$SCRIPT_DIR/pacman-deps-prepare.sh" --install ||
-                    die "CachyOS pacman dependency setup failed"
-            else
+            # Unverified systems already approved CONTINUE above. Prefer
+            # the discovered *native* package manager, but never mark an
+            # experimental distribution as verified. Unknown managers,
+            # unavailable packages and failed build checks use the manual
+            # audit/retry loop instead of stopping at the package-name error.
+            EXPERIMENTAL_READY=0
+            case "$MU_PKG_BACKEND" in
+                pacman)
+                    echo 'Experimental Pacman dependency preparation.'
+                    if bash "$SCRIPT_DIR/pacman-deps-prepare.sh" --install; then
+                        EXPERIMENTAL_READY=1
+                    fi
+                    ;;
+                dnf)
+                    echo 'Experimental native DNF dependency preparation.'
+                    if run_root dnf install -y "${FEDORA_PACKAGES[@]}"; then
+                        EXPERIMENTAL_READY=1
+                    fi
+                    ;;
+                apt)
+                    echo 'Experimental native APT dependency preparation.'
+                    if [ "$(dpkg --print-architecture)" = amd64 ]; then
+                        if ! dpkg --print-foreign-architectures | grep -Fxq i386; then
+                            if ! run_root dpkg --add-architecture i386; then
+                                echo 'NOTICE: could not enable the i386 architecture.'
+                            fi
+                        fi
+                        if dpkg --print-foreign-architectures | grep -Fxq i386 &&
+                           run_root env DEBIAN_FRONTEND=noninteractive apt-get update &&
+                           run_root env DEBIAN_FRONTEND=noninteractive apt-get install -y "${UBUNTU_PACKAGES[@]}"; then
+                            EXPERIMENTAL_READY=1
+                        fi
+                    else
+                        echo 'NOTICE: APT recipe requires amd64 architecture.'
+                    fi
+                    ;;
+                *)
+                    echo 'NOTICE: native package manager unknown; manual dependency preparation required.'
+                    ;;
+            esac
+
+            if [ "$EXPERIMENTAL_READY" -eq 1 ]; then
+                # A completed package transaction is not proof that Wine
+                # has all 32/64-bit compiler, link and library prerequisites.
+                if ! bash "$SCRIPT_DIR/build-env-audit.sh"; then
+                    EXPERIMENTAL_READY=0
+                fi
+            fi
+            if [ "$EXPERIMENTAL_READY" -ne 1 ]; then
+                echo 'NOTICE: automatic dependency preparation was unavailable or incomplete.'
+                echo 'Install missing requirements manually, then recheck.'
                 bash "$SCRIPT_DIR/manual-deps-prepare.sh" --interactive ||
                     die "manual dependency preparation did not complete"
             fi
