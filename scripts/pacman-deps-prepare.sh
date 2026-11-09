@@ -102,19 +102,28 @@ if [[ ! -t 0 || ! -t 1 ]]; then
 fi
 
 echo
-echo 'Only missing package roots from the validated CachyOS recipe will be requested.'
+echo 'Only available, missing package roots from the detected Pacman recipe will be requested.'
 echo 'Pacman will show its own transaction and ask for confirmation.'
 
 echo
 echo '=== INSTALL MISSING DEPENDENCIES ==='
 if (( EUID == 0 )); then
-    pacman -S --needed -- "${MU_PACMAN_MISSING[@]}"
+    if ! pacman -S --needed -- "${MU_PACMAN_MISSING[@]}"; then
+        echo 'NOTICE: Pacman could not install all available package roots.'
+        echo 'PACMAN_MANUAL_FALLBACK_REQUIRED=True'
+        exit 4
+    fi
 else
-    command -v sudo >/dev/null 2>&1 || {
-        echo 'ERROR: sudo is not installed. No transaction started.' >&2
-        exit 2
-    }
-    sudo pacman -S --needed -- "${MU_PACMAN_MISSING[@]}"
+    if ! command -v sudo >/dev/null 2>&1; then
+        echo 'NOTICE: sudo is unavailable; manual dependency setup required.'
+        echo 'PACMAN_MANUAL_FALLBACK_REQUIRED=True'
+        exit 4
+    fi
+    if ! sudo pacman -S --needed -- "${MU_PACMAN_MISSING[@]}"; then
+        echo 'NOTICE: Pacman could not install all available package roots.'
+        echo 'PACMAN_MANUAL_FALLBACK_REQUIRED=True'
+        exit 4
+    fi
 fi
 
 echo
