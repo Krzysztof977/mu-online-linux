@@ -1,0 +1,32 @@
+name: Dependency routing regressions
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/**'
+      - 'tests/**'
+      - '.github/workflows/dependency-routing.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  native-and-manual:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out proposed changes
+        uses: actions/checkout@v4
+      - name: Syntax check all Bash scripts
+        shell: bash
+        run: |
+          set -euo pipefail
+          find scripts tests -type f -name '*.sh' -print0 |
+            xargs -0 -r -n1 bash -n
+      - name: Run all non-mutating regression scripts
+        shell: bash
+        run: |
+          set -euo pipefail
+          for test_script in tests/test-*.sh; do
+            echo "=== $test_script ==="
+            bash "$test_script"
+          done

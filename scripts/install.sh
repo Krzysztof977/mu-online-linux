@@ -1009,128 +1009,7 @@ run_root()
     sudo "$@"
 }
 
-FEDORA_PACKAGES=(
-    gcc
-    gcc-c++
-    make
-    bison
-    flex
-
-    mingw32-gcc
-    mingw32-binutils
-    mingw64-gcc
-    mingw64-binutils
-
-    gettext
-
-    curl
-    file
-    patch
-    python3
-    tar
-    xz
-    pkgconf-pkg-config
-
-    freetype-devel
-    fontconfig-devel
-    gnutls-devel
-
-    libX11-devel
-    libXext-devel
-    libXcursor-devel
-    libXi-devel
-    libXrandr-devel
-    libXrender-devel
-    libXinerama-devel
-    libXcomposite-devel
-    libXfixes-devel
-    libXdamage-devel
-    libXxf86vm-devel
-    libxcb-devel
-    libxkbcommon-devel
-
-    wayland-devel
-
-    mesa-libEGL-devel
-    mesa-libGL-devel
-    mesa-libgbm-devel
-    vulkan-loader-devel
-
-    pulseaudio-libs-devel.x86_64
-    pulseaudio-libs-devel.i686
-    alsa-lib-devel.x86_64
-    alsa-lib-devel.i686
-
-    coreutils
-    diffutils
-    findutils
-    grep
-    sed
-    gawk
-    perl
-)
-
-UBUNTU_PACKAGES=(
-    build-essential
-    gcc
-    g++
-    make
-    bison
-    flex
-
-    gcc-mingw-w64-i686-posix
-    binutils-mingw-w64-i686
-    gcc-mingw-w64-x86-64-posix
-    binutils-mingw-w64-x86-64
-
-    gettext
-
-    curl
-    file
-    patch
-    python3
-    tar
-    xz-utils
-    pkg-config
-
-    libfreetype-dev
-    libfontconfig1-dev
-    libgnutls28-dev
-
-    libx11-dev
-    libxext-dev
-    libxcursor-dev
-    libxi-dev
-    libxrandr-dev
-    libxrender-dev
-    libxinerama-dev
-    libxcomposite-dev
-    libxfixes-dev
-    libxdamage-dev
-    libxxf86vm-dev
-    libxcb1-dev
-    libxkbcommon-dev
-
-    libwayland-dev
-
-    libegl-dev
-    libgl-dev
-    libgbm-dev
-    libvulkan-dev
-
-    libpulse-dev:amd64
-    libpulse-dev:i386
-    libasound2-dev:amd64
-    libasound2-dev:i386
-
-    coreutils
-    diffutils
-    findutils
-    grep
-    sed
-    gawk
-    perl
-)
+. "$SCRIPT_DIR/lib/native-deps.sh"
 
 log "Build dependencies"
 
@@ -1143,9 +1022,13 @@ if [ "$SKIP_DEPS" -eq 0 ]; then
             printf 'Installing %s Fedora packages/dependency roots.\n' \
                 "${#FEDORA_PACKAGES[@]}"
 
-            run_root \
+            if ! run_root \
                 dnf install -y \
-                "${FEDORA_PACKAGES[@]}"
+                "${FEDORA_PACKAGES[@]}"; then
+                echo 'NOTICE: DNF could not install all dependency roots.'
+                bash "$SCRIPT_DIR/manual-deps-prepare.sh" --interactive ||
+                    die "manual dependency preparation did not complete"
+            fi
             ;;
 
         ubuntu)
@@ -1176,27 +1059,65 @@ if [ "$SKIP_DEPS" -eq 0 ]; then
 
             log "Refresh Ubuntu package metadata"
 
-            run_root \
+            APT_PREPARED=1
+            if ! run_root \
                 env DEBIAN_FRONTEND=noninteractive \
-                apt-get update
+                apt-get update; then
+                APT_PREPARED=0
+            fi
 
             printf 'Installing %s Ubuntu packages/dependency roots.\n' \
                 "${#UBUNTU_PACKAGES[@]}"
 
-            run_root \
+            if [ "$APT_PREPARED" -eq 1 ] &&
+               ! run_root \
                 env DEBIAN_FRONTEND=noninteractive \
                 apt-get install -y \
-                "${UBUNTU_PACKAGES[@]}"
+                "${UBUNTU_PACKAGES[@]}"; then
+                APT_PREPARED=0
+            fi
+            if [ "$APT_PREPARED" -ne 1 ]; then
+                echo 'NOTICE: APT could not install all dependency roots.'
+                bash "$SCRIPT_DIR/manual-deps-prepare.sh" --interactive ||
+                    die "manual dependency preparation did not complete"
+            fi
             ;;
 
         portable)
-            # A detected package manager is not automatically a tested recipe.
-            # Unverified distributions receive a single CONTINUE prompt above.
-            if [ "$MU_PKG_BACKEND" = pacman ] &&
-               [ "$MU_PKG_RECIPE" = cachyos-v020 ]; then
-                bash "$SCRIPT_DIR/pacman-deps-prepare.sh" --install ||
-                    die "CachyOS pacman dependency setup failed"
-            else
+            # Unverified systems already approved CONTINUE above. Prefer
+            # the discovered *native* package manager, but never mark an
+            # experimental distribution as verified. Unknown managers,
+            # unavailable packages and failed build checks use the manual
+            # audit/retry loop instead of stopping at the package-name error.
+            EXPERIMENTAL_READY=0
+            case "$MU_PKG_BACKEND" in
+                pacman)
+                    echo 'Experimental Pacman dependency preparation.'
+                    if bash "$SCRIPT_DIR/pacman-deps-prepare.sh" --install; then
+                        EXPERIMENTAL_READY=1
+                    fi
+                    ;;
+                dnf|apt)
+                    echo "Experimental native $MU_PKG_BACKEND dependency preparation."
+                    if bash "$SCRIPT_DIR/native-deps-prepare.sh" "$MU_PKG_BACKEND" --install; then
+                        EXPERIMENTAL_READY=1
+                    fi
+                    ;;
+                *)
+                    echo 'NOTICE: native package manager unknown; manual dependency preparation required.'
+                    ;;
+            esac
+
+            if [ "$EXPERIMENTAL_READY" -eq 1 ]; then
+                # A completed package transaction is not proof that Wine
+                # has all 32/64-bit compiler, link and library prerequisites.
+                if ! bash "$SCRIPT_DIR/build-env-audit.sh"; then
+                    EXPERIMENTAL_READY=0
+                fi
+            fi
+            if [ "$EXPERIMENTAL_READY" -ne 1 ]; then
+                echo 'NOTICE: automatic dependency preparation was unavailable or incomplete.'
+                echo 'Install missing requirements manually, then recheck.'
                 bash "$SCRIPT_DIR/manual-deps-prepare.sh" --interactive ||
                     die "manual dependency preparation did not complete"
             fi
@@ -1208,6 +1129,17 @@ if [ "$SKIP_DEPS" -eq 0 ]; then
     esac
 else
     printf 'Dependency installation skipped by --skip-deps.\n'
+fi
+
+# Normal installs may still lack optional toolchain/library prerequisites
+# after a seemingly successful native transaction. Offer the same manual
+# recheck path; --skip-deps and --deps-only stay read-only/noninteractive.
+if [ "$SKIP_DEPS" -eq 0 ] && [ "$DEPS_ONLY" -eq 0 ]; then
+    if ! bash "$SCRIPT_DIR/build-env-audit.sh"; then
+        echo 'NOTICE: build prerequisites are incomplete after package preparation.'
+        bash "$SCRIPT_DIR/manual-deps-prepare.sh" --interactive ||
+            die "manual dependency preparation did not complete"
+    fi
 fi
 
 log "Build tool validation"

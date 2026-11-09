@@ -7,8 +7,10 @@ INSTALL="$ROOT/scripts/install.sh"
 PACMAN="$ROOT/scripts/pacman-deps-prepare.sh"
 MANUAL="$ROOT/scripts/manual-deps-prepare.sh"
 DISPATCH="$ROOT/scripts/v020-dependencies.sh"
+NATIVE="$ROOT/scripts/native-deps-prepare.sh"
+PLATFORM="$ROOT/scripts/lib/platform-detect.sh"
 
-for script in "$INSTALL" "$PACMAN" "$MANUAL" "$DISPATCH"; do
+for script in "$INSTALL" "$PACMAN" "$MANUAL" "$DISPATCH" "$NATIVE"; do
     bash -n "$script"
 done
 echo 'V020_ROUTING_SYNTAX_PASS=True'
@@ -21,11 +23,19 @@ grep -Fq 'Type CONTINUE to proceed with experimental installation:' "$INSTALL"
 ! grep -Fq 'CONFIRM EXPERIMENTAL PACKAGE TRANSACTION' "$PACMAN"
 echo 'V020_SINGLE_CONSENT_PASS=True'
 
-# Never authorize CachyOS package names solely because pacman is installed.
-grep -Fq '[ "$MU_PKG_RECIPE" = cachyos-v020 ]' "$INSTALL"
-grep -Fq '"$MU_PKG_RECIPE" != cachyos-v020' "$PACMAN"
-grep -Fq '"$MU_PKG_RECIPE" == cachyos-v020' "$DISPATCH"
-echo 'V020_RECIPE_GUARD_PASS=True'
+# Native package manager discovery is independent from E2E verification.
+# Experimental package recipes do not confer verified status; the installer
+# requires the one-time CONTINUE confirmation before attempting a transaction.
+grep -Fq 'MU_PKG_RECIPE="pacman-experimental-v020"' "$PLATFORM"
+grep -Fq 'MU_PKG_RECIPE="dnf-experimental-v020"' "$PLATFORM"
+grep -Fq 'MU_PKG_RECIPE="apt-experimental-v020"' "$PLATFORM"
+grep -Fq 'Type CONTINUE to proceed with experimental installation:' "$INSTALL"
+grep -Fq 'Experimental Pacman dependency preparation.' "$INSTALL"
+grep -Fq 'bash "$SCRIPT_DIR/native-deps-prepare.sh" "$MU_PKG_BACKEND" --install' "$INSTALL"
+grep -Fq 'manual-deps-prepare.sh" --interactive' "$INSTALL"
+grep -Fq 'PACMAN_MANUAL_FALLBACK_REQUIRED=True' "$PACMAN"
+grep -Fq 'NATIVE_MANUAL_FALLBACK_REQUIRED=True' "$NATIVE"
+echo 'V020_EXPERIMENTAL_NATIVE_FALLBACK_GUARD_PASS=True'
 
 # The manual fallback loops until its independent build audit passes, or the
 # user quits; Enter retries the audit without package-manager writes.

@@ -24,21 +24,59 @@ if [[ "$MU_HOST_ARCH" != x86_64 ]]; then
     exit 2
 fi
 
-# A candidate backend is NOT a validated package recipe.
-# Only CachyOS has a validated automatic Pacman package recipe.
-if [[ "$MU_PKG_BACKEND" == pacman && "$MU_PKG_RECIPE" == cachyos-v020 ]]; then
-    echo 'V020_DEPENDENCY_ROUTE=cachyos-pacman'
-    if [[ "$mode" == --prepare ]]; then
-        exec bash "$SCRIPT_DIR/pacman-deps-prepare.sh" --install
+# --check is read-only. --prepare can modify system packages, and an
+# unverified OS must explicitly consent before any transaction.
+if [[ "$mode" == --prepare && "$MU_DISTRO_STATUS" != verified ]]; then
+    if [[ ! -t 0 || ! -t 1 ]]; then
+        echo 'ERROR: unverified distribution requires interactive confirmation.' >&2
+        exit 3
     fi
-    exec bash "$SCRIPT_DIR/pacman-deps-prepare.sh" --plan
+    . "$SCRIPT_DIR/lib/consent.sh"
+    printf 'Unverified distribution: %s\n' "$MU_DISTRO_ID"
+    read -r -p 'Type CONTINUE to proceed with experimental installation: ' consent ||
+        exit 3
+    mu_consent_matches "$consent" CONTINUE || {
+        echo 'ERROR: experimental dependency preparation not approved.' >&2
+        exit 3
+    }
 fi
 
-echo 'V020_DEPENDENCY_ROUTE=manual'
-if [[ "$MU_PKG_BACKEND" == dnf || "$MU_PKG_BACKEND" == apt ]]; then
-    echo 'NOTICE: the existing v0.1.1 installer retains its verified dnf/apt flow.'
-    echo 'NOTICE: this experimental v0.2.0 dispatcher does not alter those recipes.'
-fi
+route=""
+case "$MU_PKG_BACKEND" in
+    pacman)
+        if [[ "$MU_PKG_RECIPE" == cachyos-v020 ]]; then
+            route="cachyos-pacman"
+        else
+            route="experimental-pacman"
+        fi
+        echo "V020_DEPENDENCY_ROUTE=$route"
+        if [[ "$mode" == --check ]]; then
+            exec bash "$SCRIPT_DIR/pacman-deps-prepare.sh" --plan
+        fi
+        if bash "$SCRIPT_DIR/pacman-deps-prepare.sh" --install; then
+            echo 'V020_DEPENDENCIES_PREPARED=True'
+            exit 0
+        fi
+        ;;
+    dnf|apt)
+        echo "V020_DEPENDENCY_ROUTE=experimental-$MU_PKG_BACKEND"
+        if [[ "$mode" == --check ]]; then
+            exec bash "$SCRIPT_DIR/native-deps-prepare.sh" "$MU_PKG_BACKEND" --check
+        fi
+        if bash "$SCRIPT_DIR/native-deps-prepare.sh" "$MU_PKG_BACKEND" --install; then
+            echo 'V020_DEPENDENCIES_PREPARED=True'
+            exit 0
+        fi
+        ;;
+    *)
+        echo 'V020_DEPENDENCY_ROUTE=manual'
+        ;;
+esac
+
+# Unknown package manager or incomplete native package transaction.
+# Never guess additional package names: audit and prompt the user to
+# install missing tools/libraries with their distribution's mechanisms.
+echo 'NOTICE: complete missing dependencies manually, then recheck.'
 if [[ "$mode" == --prepare ]]; then
     exec bash "$SCRIPT_DIR/manual-deps-prepare.sh" --interactive
 fi
