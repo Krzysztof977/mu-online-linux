@@ -5,6 +5,11 @@ All notable project changes intended for public releases are recorded here.
 ## 0.2.0 — CachyOS / Pacman support
 
 ### Added
+- Experimental dependency preparation with the detected native Pacman,
+  DNF or APT backend on unverified distributions after explicit `CONTINUE`.
+  Unknown package managers, unavailable package roots and unsuccessful
+  build audits fall back to guided manual dependency preparation. This
+  does not expand the E2E-verified distribution list.
 - CachyOS rolling-release discovery, native Pacman backend and 40-root
   dependency recipe including multilib and Vulkan headers.
 - Automatic missing-package installation with the verified CachyOS recipe
