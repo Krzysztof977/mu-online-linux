@@ -259,14 +259,22 @@ Enter. Empty input, surrounding spaces and other words are rejected.
 The confirmation requires an interactive terminal and is not repeated
 by the package-manager or manual-dependency helper.
 
-A detected package manager does **not** automatically authorize a tested
-package recipe. In particular, generic Arch Linux and other Arch
-derivatives do not receive the CachyOS recipe merely because they use
-Pacman. When no validated recipe exists, the installer offers
-assisted-manual dependency preparation: install missing dependencies
-using your native package manager, press **Enter** to recheck or **Q**
-to quit. The build/toolchain, 32/64-bit ABI, graphics, network and audio
-prerequisites must pass before installation can proceed.
+After you confirm `CONTINUE`, the installer **first attempts to prepare
+dependencies automatically** with a recognized, native package manager:
+Pacman, DNF or APT. On unverified distributions, these package lists are
+**experimental** and do not imply that the OS has passed E2E testing.
+For example, Arch Linux can check the 40 Pacman dependency roots and
+offer to install available missing packages through Pacman's normal
+transaction confirmation; it does not inherit CachyOS's verified status.
+
+**Manual preparation is a fallback**, not the default. If no supported
+native package manager is detected, some packages are not available
+in its configured repositories, a transaction cannot finish, or required
+build checks still fail, the installer shows the missing prerequisites.
+Install or supply them manually with your distribution's tools, press
+**Enter** to recheck or **Q** to quit. The build/toolchain, 32/64-bit ABI,
+graphics, network and audio checks must pass before Wine compilation.
+The installer never runs `pacman -Sy` or silently upgrades the system.
 
 Versions outside the tested Fedora/Nobara/Ubuntu reference set are
 also classified as unverified. Generic Arch derivatives have not passed
