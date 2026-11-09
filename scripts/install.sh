@@ -1022,9 +1022,13 @@ if [ "$SKIP_DEPS" -eq 0 ]; then
             printf 'Installing %s Fedora packages/dependency roots.\n' \
                 "${#FEDORA_PACKAGES[@]}"
 
-            run_root \
+            if ! run_root \
                 dnf install -y \
-                "${FEDORA_PACKAGES[@]}"
+                "${FEDORA_PACKAGES[@]}"; then
+                echo 'NOTICE: DNF could not install all dependency roots.'
+                bash "$SCRIPT_DIR/manual-deps-prepare.sh" --interactive ||
+                    die "manual dependency preparation did not complete"
+            fi
             ;;
 
         ubuntu)
@@ -1055,17 +1059,28 @@ if [ "$SKIP_DEPS" -eq 0 ]; then
 
             log "Refresh Ubuntu package metadata"
 
-            run_root \
+            APT_PREPARED=1
+            if ! run_root \
                 env DEBIAN_FRONTEND=noninteractive \
-                apt-get update
+                apt-get update; then
+                APT_PREPARED=0
+            fi
 
             printf 'Installing %s Ubuntu packages/dependency roots.\n' \
                 "${#UBUNTU_PACKAGES[@]}"
 
-            run_root \
+            if [ "$APT_PREPARED" -eq 1 ] &&
+               ! run_root \
                 env DEBIAN_FRONTEND=noninteractive \
                 apt-get install -y \
-                "${UBUNTU_PACKAGES[@]}"
+                "${UBUNTU_PACKAGES[@]}"; then
+                APT_PREPARED=0
+            fi
+            if [ "$APT_PREPARED" -ne 1 ]; then
+                echo 'NOTICE: APT could not install all dependency roots.'
+                bash "$SCRIPT_DIR/manual-deps-prepare.sh" --interactive ||
+                    die "manual dependency preparation did not complete"
+            fi
             ;;
 
         portable)
@@ -1114,6 +1129,17 @@ if [ "$SKIP_DEPS" -eq 0 ]; then
     esac
 else
     printf 'Dependency installation skipped by --skip-deps.\n'
+fi
+
+# Normal installs may still lack optional toolchain/library prerequisites
+# after a seemingly successful native transaction. Offer the same manual
+# recheck path; --skip-deps and --deps-only stay read-only/noninteractive.
+if [ "$SKIP_DEPS" -eq 0 ] && [ "$DEPS_ONLY" -eq 0 ]; then
+    if ! bash "$SCRIPT_DIR/build-env-audit.sh"; then
+        echo 'NOTICE: build prerequisites are incomplete after package preparation.'
+        bash "$SCRIPT_DIR/manual-deps-prepare.sh" --interactive ||
+            die "manual dependency preparation did not complete"
+    fi
 fi
 
 log "Build tool validation"
