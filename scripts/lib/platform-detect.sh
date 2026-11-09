@@ -90,13 +90,22 @@ mu_detect_platform() {
             fi ;;
     esac
 
-    # Recipes are assigned only to explicitly tested ID/backend pairs.
-    # A generic Arch derivative is not granted the CachyOS recipe.
+    # Verified recipes remain tied to their tested distribution.
+    # A detected native package manager may also try its matching
+    # *experimental* recipe after explicit installer consent. That does not
+    # upgrade the distribution's verification status.
     case "$MU_DISTRO_ID:$MU_PKG_BACKEND" in
         fedora:dnf|nobara:dnf) MU_PKG_RECIPE="fedora-v011" ;;
         ubuntu:apt) MU_PKG_RECIPE="ubuntu-v011" ;;
         cachyos:pacman) MU_PKG_RECIPE="cachyos-v020" ;;
     esac
+    if [[ "$MU_PKG_RECIPE" == unavailable ]]; then
+        case "$MU_PKG_BACKEND" in
+            pacman) MU_PKG_RECIPE="pacman-experimental-v020" ;;
+            dnf) MU_PKG_RECIPE="dnf-experimental-v020" ;;
+            apt) MU_PKG_RECIPE="apt-experimental-v020" ;;
+        esac
+    fi
 }
 
 mu_platform_report() {
