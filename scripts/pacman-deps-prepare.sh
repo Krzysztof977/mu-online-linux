@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Pacman dependency preparation for the verified CachyOS recipe.
+# Pacman dependency preparation for CachyOS and explicitly consented experimental systems.
 # --plan is read-only; --install requires a TTY and Pacman's confirmation.
 # Distribution consent, when required, is handled by the calling installer.
 set -euo pipefail
@@ -31,11 +31,16 @@ if [[ "$MU_PKG_BACKEND" != pacman ]]; then
     printf 'ERROR: no native pacman backend detected. Use manual dependency setup.\n' >&2
     exit 2
 fi
-# Detecting pacman alone does not authorize the CachyOS package recipe.
+# The main installer obtained CONTINUE for unverified systems.
+# Standalone --install still uses Pacman's native confirmation; non-CachyOS
+# recipes are experimental and must not be described as verified.
 if [[ "$mode" == --install && "$MU_PKG_RECIPE" != cachyos-v020 ]]; then
-    printf 'ERROR: automatic pacman package recipe is validated only on CachyOS.\n' >&2
-    printf 'NEXT: use assisted manual dependency preparation for this distribution.\n' >&2
-    exit 2
+    if [[ "$MU_PKG_RECIPE" != pacman-experimental-v020 ||
+          "$MU_DISTRO_STATUS" != unverified ]]; then
+        echo 'ERROR: no supported Pacman dependency route for this platform.' >&2
+        exit 2
+    fi
+    echo 'WARNING: experimental Pacman dependency recipe; MU/GameGuard compatibility is unverified.'
 fi
 if ! pacman-conf --repo-list | grep -Fxq multilib; then
     printf 'ERROR: pacman multilib is not enabled. No installation attempted.\n' >&2
@@ -45,17 +50,29 @@ fi
 echo
 echo '=== PACMAN DEPENDENCY PLAN (LOCAL DATABASE) ==='
 mu_pacman_roots
-if ! mu_pacman_audit; then
-    echo 'ERROR: some roots are unavailable in the local pacman database.'
-    echo 'Review repositories and package names. Do not use pacman -Sy as a workaround.'
-    exit 2
+# Missing package names must not prevent installation of other available
+# roots. A manual dependency audit follows if any root remains unavailable.
+if mu_pacman_audit; then
+    unavailable=0
+else
+    unavailable=1
+    echo 'NOTICE: some package roots are unavailable in the local Pacman database.'
+    echo 'Available roots may still be installed; remaining prerequisites require manual setup.'
+    echo 'Do not use pacman -Sy as a workaround.'
 fi
 
 if (( ${#MU_PACMAN_MISSING[@]} == 0 )); then
+    if (( unavailable != 0 )); then
+        echo 'PACMAN_MANUAL_FALLBACK_REQUIRED=True'
+        exit 4
+    fi
     echo
     echo 'PACMAN_DEPENDENCIES_ALREADY_INSTALLED=True'
     echo '=== INDEPENDENT BUILD ENVIRONMENT CHECK ==='
-    bash "$SCRIPT_DIR/build-env-audit.sh"
+    if ! bash "$SCRIPT_DIR/build-env-audit.sh"; then
+        echo 'PACMAN_MANUAL_FALLBACK_REQUIRED=True'
+        exit 4
+    fi
     echo 'V020_PACMAN_DEPS_PREPARED=True'
     exit 0
 fi
@@ -72,6 +89,9 @@ echo 'review a full system upgrade with sudo pacman -Syu.'
 if [[ "$mode" == --plan ]]; then
     echo
     echo 'READ_ONLY_PLAN=True'
+    if (( unavailable != 0 )); then
+        echo 'PACMAN_MANUAL_FALLBACK_REQUIRED=True'
+    fi
     echo 'To install after reviewing the plan: bash scripts/pacman-deps-prepare.sh --install'
     exit 0
 fi
@@ -99,13 +119,21 @@ fi
 
 echo
 echo '=== RECHECK INSTALLED ROOTS ==='
-mu_pacman_audit || exit 1
+if ! mu_pacman_audit; then
+    echo 'NOTICE: some package roots remain unavailable after the transaction.'
+    echo 'PACMAN_MANUAL_FALLBACK_REQUIRED=True'
+    exit 4
+fi
 if (( ${#MU_PACMAN_MISSING[@]} != 0 )); then
-    echo 'ERROR: dependency transaction finished but package roots are still missing.' >&2
-    exit 1
+    echo 'NOTICE: package roots are still missing after the transaction.'
+    echo 'PACMAN_MANUAL_FALLBACK_REQUIRED=True'
+    exit 4
 fi
 
 echo
 echo '=== INDEPENDENT BUILD ENVIRONMENT CHECK ==='
-bash "$SCRIPT_DIR/build-env-audit.sh"
+if ! bash "$SCRIPT_DIR/build-env-audit.sh"; then
+    echo 'PACMAN_MANUAL_FALLBACK_REQUIRED=True'
+    exit 4
+fi
 echo 'V020_PACMAN_DEPS_PREPARED=True'
