@@ -102,8 +102,10 @@ not repeated on those systems. CachyOS completed a full v0.2.0 E2E run.
 Fedora and Nobara releases other than 44, and Ubuntu releases other
 than 26.04, are not currently reference-tested.
 
-Other distributions, including generic Arch Linux and its derivatives,
-have not passed full end-to-end validation in this project.
+Other Linux x86_64 distributions can also attempt installation with v0.2.0.
+On an unverified system, the installer asks for explicit confirmation
+before proceeding. Installation and gameplay may work if the required
+dependencies and compatibility checks pass, but success is not guaranteed.
 
 ## Requirements
 
@@ -237,9 +239,13 @@ GPU or driver combination.
 
 ### Other distributions — experimental (unverified)
 
-The v0.2.0 installer does not reject an unfamiliar distribution solely
-because of its name. It can attempt an experimental install on another
-Linux x86_64 system, but **unverified does not mean supported**.
+**You can try installing v0.2.0 on other, untested Linux x86_64
+distributions too.** The installer does not reject an unfamiliar OS solely
+because of its name. Instead, it asks whether you want to continue with
+an experimental installation. If the dependencies and compatibility
+checks pass, the installer may complete successfully and MU Online may
+work normally. However, these systems have not been tested end to end,
+so successful installation or gameplay cannot be guaranteed.
 
 Run the same `v0.2.0` installer with your own official MU Online Windows
 installer. On an unverified distribution, the installer asks once:
