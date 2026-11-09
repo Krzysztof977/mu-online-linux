@@ -22,14 +22,11 @@ jobs:
           set -euo pipefail
           find scripts tests -type f -name '*.sh' -print0 |
             xargs -0 -r -n1 bash -n
-      - name: Run isolated native dependency and consent tests
+      - name: Run all non-mutating regression scripts
         shell: bash
         run: |
           set -euo pipefail
-          bash tests/test-consent-routing.sh
-          bash tests/test-experimental-managers.sh
-          bash tests/test-platform-detect.sh
-          bash tests/test-pacman-deps.sh
-          bash tests/test-consent.sh
-          bash tests/test-manual-deps.sh
-          bash tests/test-build-env.sh
+          for test_script in tests/test-*.sh; do
+            echo "=== $test_script ==="
+            bash "$test_script"
+          done
